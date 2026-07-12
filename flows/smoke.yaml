@@ -1,0 +1,17 @@
+appId: dev.podium.sample
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "username"
+- inputText: "podium"
+- tapOn:
+    id: "password"
+- inputText: "pass"
+- tapOn:
+    id: "login_button"
+- assertVisible: "Welcome"
+- scrollUntilVisible:
+    element: "Item 50"
+- tapOn: "Item 50"
+- assertVisible: "Reached end"

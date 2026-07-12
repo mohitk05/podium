@@ -1,0 +1,77 @@
+appId: dev.podium.sample
+---
+# Step 1: launch
+- launchApp:
+    clearState: true
+# Step 2: assert login screen visible
+- assertVisible:
+    id: "username"
+# Step 3: tap username
+- tapOn:
+    id: "username"
+# Step 4: input username
+- inputText: "podium"
+# Step 5: assert username field has value (re-visible)
+- assertVisible:
+    id: "username"
+# Step 6: tap password
+- tapOn:
+    id: "password"
+# Step 7: input password
+- inputText: "pass"
+# Step 8: assert password field visible
+- assertVisible:
+    id: "password"
+# Step 9: tap login
+- tapOn:
+    id: "login_button"
+# Step 10: assert welcome
+- assertVisible: "Welcome"
+# Steps 11-30: scroll down and assert items
+- assertVisible: "Item 1"
+- scrollUntilVisible: "Item 5"
+- assertVisible: "Item 5"
+- scrollUntilVisible: "Item 10"
+- assertVisible: "Item 10"
+- scrollUntilVisible: "Item 15"
+- assertVisible: "Item 15"
+- scrollUntilVisible: "Item 20"
+- assertVisible: "Item 20"
+- scrollUntilVisible: "Item 25"
+- assertVisible: "Item 25"
+- scrollUntilVisible: "Item 30"
+- assertVisible: "Item 30"
+- scrollUntilVisible: "Item 35"
+- assertVisible: "Item 35"
+- scrollUntilVisible: "Item 40"
+- assertVisible: "Item 40"
+- scrollUntilVisible: "Item 45"
+- assertVisible: "Item 45"
+- scrollUntilVisible: "Item 50"
+# Step 31-32: tap last item and assert end text
+- tapOn: "Item 50"
+- assertVisible: "Reached end"
+# Steps 33-50: scroll back to top then re-scroll down for more iterations
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- swipe:
+    direction: UP
+- assertVisible: "Item 5"
+- scrollUntilVisible: "Item 15"
+- assertVisible: "Item 15"
+- scrollUntilVisible: "Item 25"
+- assertVisible: "Item 25"
+- scrollUntilVisible: "Item 35"
+- assertVisible: "Item 35"
+- scrollUntilVisible: "Item 45"
+- assertVisible: "Item 45"
+- scrollUntilVisible: "Item 50"
+- assertVisible: "Item 50"
+- tapOn: "Item 50"
+- assertVisible: "Reached end"

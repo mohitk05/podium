@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Podium Sample</string>
+    <string name="username_hint">Username</string>
+    <string name="password_hint">Password</string>
+    <string name="login_button">Log in</string>
+    <string name="welcome">Welcome</string>
+    <string name="error_invalid_credentials">Invalid credentials</string>
+</resources>

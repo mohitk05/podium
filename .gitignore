@@ -1,0 +1,23 @@
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
+
+# Android build outputs
+android/.gradle/
+android/*/build/
+android/*/local.properties
+*.apk
+*.aab
+
+# CLI output
+podium-out/
+podium-*/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+*.iml
+.vscode/settings.json
