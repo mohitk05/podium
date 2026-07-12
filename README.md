@@ -41,44 +41,133 @@ Appium-based cloud testing is slow because the test interpreter runs on the clie
 
 **Key design invariant:** All timing/retry semantics live in Rust (`engine.rs`). The Kotlin driver is a thin adapter — no polling, no sleeps, no retry logic. This makes the engine unit-testable against a `MockDriver` on the host, and makes a future iOS port a matter of writing a Swift `Driver` over XCUITest.
 
-## Prerequisites
+## Fresh machine setup
+
+These steps take a machine with nothing installed to a running demo. Skip any step you've already done.
+
+### 1. Rust
 
 ```bash
-java -version          # JDK 17+
-echo $ANDROID_HOME     # must be set
-adb devices            # emulator or device connected
-rustc --version        # 1.75+
-cargo ndk --version    # cargo install cargo-ndk if missing
-rustup target list --installed  # need: aarch64-linux-android, x86_64-linux-android
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
 ```
 
-Install missing Rust targets:
+Add the Android cross-compilation targets:
+
 ```bash
 rustup target add aarch64-linux-android x86_64-linux-android
 ```
 
-## Quickstart
+### 2. Java (JDK 17+)
+
+**macOS:**
+```bash
+brew install --cask temurin@17
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt-get install -y temurin-17-jdk   # needs adoptium repo
+# or: sudo apt-get install -y openjdk-17-jdk
+```
+
+Verify: `java -version` should show 17 or higher.
+
+### 3. Android SDK + NDK + emulator
+
+Install [Android Studio](https://developer.android.com/studio) (includes the SDK manager), or install the command-line tools only:
 
 ```bash
-# 1. Build everything (Rust core → UniFFI bindings → Android APKs)
+# macOS (Homebrew)
+brew install --cask android-commandlinetools
+
+# Linux — download from https://developer.android.com/studio#command-tools
+# and unzip to ~/android-sdk/cmdline-tools/latest/
+```
+
+Then install the required SDK components:
+
+```bash
+sdkmanager "platform-tools" "platforms;android-35" "ndk;27.2.12479018"
+
+# For running a local emulator:
+sdkmanager "emulator" "system-images;android-35;google_apis;x86_64"
+avdmanager create avd -n podium -k "system-images;android-35;google_apis;x86_64"
+```
+
+Set the environment variable (add to `~/.zshrc` or `~/.bashrc`):
+
+```bash
+export ANDROID_HOME="$HOME/Library/Android/sdk"   # macOS default
+# export ANDROID_HOME="$HOME/android-sdk"         # Linux / custom path
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+```
+
+Verify: `adb version` and `echo $ANDROID_HOME` both return values.
+
+### 4. cargo-ndk
+
+```bash
+cargo install cargo-ndk --locked
+```
+
+### 5. Clone and build
+
+```bash
+git clone https://github.com/mohitk05/podium.git
+cd podium
+
+# Build Rust core → Kotlin bindings → Android APKs
 bash scripts/build-runner.sh
+```
 
-# 2. Start an emulator (if none connected)
-emulator -avd <avd-name> -no-window -no-audio &
+### 6. Start an emulator (or connect a device)
+
+```bash
+emulator -avd podium -no-window -no-audio &
 adb wait-for-device
+```
 
-# 3. Install sample app
+Or plug in an Android device with USB debugging enabled.
+
+### 7. Install the `podium` CLI
+
+```bash
+cargo install --path cli
+```
+
+### 8. Run the demo
+
+```bash
+# Install the sample app
 adb install -r android/sampleapp/build/outputs/apk/debug/sampleapp-debug.apk
 
-# 4. Validate flows (no device needed)
+# Validate flows (no device needed)
 podium validate flows/
 
-# 5. Run flows on device
-podium test flows/login.yaml \
-  --runner android/runner/build/outputs/apk/androidTest/debug/runner-debug-androidTest.apk
+# Run the login + smoke flows
+podium test flows/login.yaml
+podium test flows/smoke.yaml
 
-# 6. Or run everything at once
+# Or run everything at once
 bash scripts/run-local.sh
+```
+
+### Download pre-built binaries (alternative to building from source)
+
+Each [GitHub Release](https://github.com/mohitk05/podium/releases) ships:
+- `runner-debug-androidTest.apk` — the instrumentation APK (contains the Rust core)
+- `sampleapp-debug.apk` — the sample app
+- `podium-macos-aarch64`, `podium-macos-x86_64`, `podium-linux-x86_64` — the CLI
+
+```bash
+# Download and use the CLI directly (macOS Apple Silicon example)
+curl -Lo podium https://github.com/mohitk05/podium/releases/latest/download/podium-macos-aarch64
+chmod +x podium && sudo mv podium /usr/local/bin/
+
+# Install the APKs
+adb install -r sampleapp-debug.apk
+podium test flows/login.yaml --runner runner-debug-androidTest.apk
 ```
 
 ## Command Reference
