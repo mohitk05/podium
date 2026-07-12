@@ -2,7 +2,6 @@ package dev.podium.runner
 
 import android.content.Context
 import android.content.Intent
-import android.view.KeyEvent
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
@@ -81,10 +80,11 @@ class UiAutomatorDriver(private val device: UiDevice) : Driver {
 
             focused.text = text
 
-            // Dismiss keyboard so it doesn't cover elements in the next tap.
-            // pressKeyCode is faster than executeShellCommand for key injection.
-            device.pressKeyCode(KeyEvent.KEYCODE_ESCAPE)
-            device.waitForIdle(300)
+            // Dismiss keyboard via shell — reliable on all Android versions and real devices.
+            // KEYCODE_ESCAPE (pressKeyCode) doesn't close the IME on Pixel/Android 13+.
+            // `input keyevent` targets whichever window has focus, which is the IME after setText.
+            device.executeShellCommand("input keyevent KEYCODE_BACK")
+            device.waitForIdle(500)
         } catch (e: DriverException) {
             throw e
         } catch (e: Exception) {
