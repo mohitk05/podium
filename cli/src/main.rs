@@ -1,7 +1,41 @@
 use clap::{Parser, Subcommand};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
+
+// APKs embedded at compile time by build.rs.
+// When building without the Android artifacts (e.g. `cargo build` on a fresh
+// clone), build.rs writes a sentinel placeholder so the binary still compiles.
+const BUNDLED_RUNNER_APK: &[u8] = include_bytes!("../apks/runner.apk");
+const BUNDLED_SAMPLEAPP_APK: &[u8] = include_bytes!("../apks/sampleapp.apk");
+const APK_SENTINEL: &[u8] = b"PODIUM_APK_PLACEHOLDER";
+
+/// Returns a path to a usable APK file, extracting the embedded bytes if needed.
+/// Returns None when `explicit` is None and the bundled bytes are the sentinel.
+fn ensure_apk(
+    explicit: Option<&Path>,
+    bundled: &'static [u8],
+    name: &str,
+) -> Option<PathBuf> {
+    if let Some(p) = explicit {
+        return Some(p.to_path_buf());
+    }
+    if bundled == APK_SENTINEL {
+        return None;
+    }
+    // Hash the first 256 bytes as a cheap version key
+    let mut hasher = Sha256::new();
+    hasher.update(&bundled[..bundled.len().min(256)]);
+    let hash = format!("{:.8x}", u64::from_be_bytes(hasher.finalize()[..8].try_into().unwrap()));
+    let dir = std::env::temp_dir().join("podium-apks").join(&hash);
+    let path = dir.join(name);
+    if !path.exists() {
+        std::fs::create_dir_all(&dir).ok()?;
+        std::fs::write(&path, bundled).ok()?;
+    }
+    Some(path)
+}
 
 #[derive(Parser)]
 #[command(name = "podium", about = "On-device Maestro-flow runner")]
@@ -119,8 +153,6 @@ fn cmd_validate(path: &Path, env: &HashMap<String, String>) -> ExitCode {
 // ── test ─────────────────────────────────────────────────────────────────────
 
 const DEVICE_FLOWS_DIR: &str = "/data/local/tmp/podium/flows";
-const DEFAULT_RUNNER_APK: &str =
-    "android/runner/build/outputs/apk/androidTest/debug/runner-debug-androidTest.apk";
 
 fn cmd_test(
     flows_path: &Path,
@@ -160,19 +192,26 @@ fn cmd_test(
     }
 
     // 2. Install APKs
-    if let Some(app) = app_apk {
-        println!("Installing app APK: {}", app.display());
-        if !adb(serial, &["install", "-r", &app.to_string_lossy()]).success() {
+    if let Some(path) = ensure_apk(app_apk, BUNDLED_SAMPLEAPP_APK, "sampleapp.apk") {
+        println!("Installing app APK: {}", path.display());
+        if !adb(serial, &["install", "-r", &path.to_string_lossy()]).success() {
             eprintln!("Failed to install app APK");
             return ExitCode::FAILURE;
         }
     }
 
-    let runner = runner_apk
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| DEFAULT_RUNNER_APK.to_string());
-    println!("Installing runner APK: {runner}");
-    if !adb(serial, &["install", "-r", &runner]).success() {
+    let runner_path = match ensure_apk(runner_apk, BUNDLED_RUNNER_APK, "runner.apk") {
+        Some(p) => p,
+        None => {
+            eprintln!(
+                "No runner APK available. Either pass --runner <path> or use a release build \
+                 that has the APKs embedded."
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("Installing runner APK: {}", runner_path.display());
+    if !adb(serial, &["install", "-r", &runner_path.to_string_lossy()]).success() {
         eprintln!("Failed to install runner APK");
         return ExitCode::FAILURE;
     }

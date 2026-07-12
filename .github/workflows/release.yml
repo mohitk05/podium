@@ -58,6 +58,7 @@ jobs:
 
   cli:
     name: Build CLI (${{ matrix.target }})
+    needs: apks
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -87,7 +88,19 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build CLI
+      - name: Download APKs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: apks
+          path: apk-dist/
+
+      - name: Stage APKs for embedding
+        run: |
+          mkdir -p cli/apks
+          cp apk-dist/android/runner/build/outputs/apk/androidTest/debug/runner-debug-androidTest.apk cli/apks/runner.apk
+          cp apk-dist/android/sampleapp/build/outputs/apk/debug/sampleapp-debug.apk cli/apks/sampleapp.apk
+
+      - name: Build CLI (with embedded APKs)
         run: cargo build --release -p podium --target ${{ matrix.target }}
 
       - name: Rename binary
