@@ -540,7 +540,7 @@ fn cmd_upload_browserstack(
         &format!("{base}/espresso/test-suite"),
         "file",
         &runner_path,
-        "test_suite_url",
+        "test_url",
     ) {
         Ok(u) => u,
         Err(e) => {
@@ -548,7 +548,7 @@ fn cmd_upload_browserstack(
             return ExitCode::FAILURE;
         }
     };
-    println!("  test_suite_url: {test_url}");
+    println!("  test_url: {test_url}");
 
     // 3. Trigger build
     println!("Triggering build…");
