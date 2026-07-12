@@ -47,6 +47,7 @@ pub enum Command {
     TakeScreenshot {
         name: String,
     },
+    HideKeyboard,
 }
 
 #[derive(uniffi::Record, Debug, Clone, Serialize, Deserialize)]

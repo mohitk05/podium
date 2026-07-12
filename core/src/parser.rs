@@ -60,10 +60,11 @@ fn substitute_env(yaml: &str, env: &HashMap<String, String>) -> String {
 }
 
 fn parse_command(value: &Value, position: usize) -> Result<Command, ParseError> {
-    // Support bare string commands: `- back` (no colon required)
+    // Support bare string commands: `- back`, `- hideKeyboard` (no colon required)
     if let Some(s) = value.as_str() {
         return match s {
             "back" => Ok(Command::Back),
+            "hideKeyboard" => Ok(Command::HideKeyboard),
             _ => Err(ParseError::UnknownCommand(s.to_string(), position)),
         };
     }
@@ -95,6 +96,7 @@ fn parse_command(value: &Value, position: usize) -> Result<Command, ParseError> 
         "assertNotVisible" => parse_assert_not_visible(cmd_value),
         "scrollUntilVisible" => parse_scroll_until_visible(cmd_value),
         "back" => Ok(Command::Back),
+        "hideKeyboard" => Ok(Command::HideKeyboard),
         "waitForAnimationToEnd" => parse_wait_for_animation(cmd_value),
         "swipe" => parse_swipe(cmd_value),
         "takeScreenshot" => parse_take_screenshot(cmd_value),

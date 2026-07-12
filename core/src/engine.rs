@@ -113,6 +113,7 @@ fn execute_command(
         Command::Swipe { direction } => driver.swipe(direction.clone()),
 
         Command::TakeScreenshot { name } => driver.take_screenshot(name.clone()),
+        Command::HideKeyboard => driver.hide_keyboard(),
     }
 }
 
@@ -220,6 +221,7 @@ fn format_command(command: &Command) -> String {
         Command::WaitForAnimationToEnd { .. } => "waitForAnimationToEnd".to_string(),
         Command::Swipe { direction } => format!("swipe({:?})", direction),
         Command::TakeScreenshot { name } => format!("takeScreenshot(\"{}\")", name),
+        Command::HideKeyboard => "hideKeyboard".to_string(),
     }
 }
 
@@ -326,6 +328,11 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push(format!("wait_for_idle({})", timeout_ms));
+            Ok(())
+        }
+
+        fn hide_keyboard(&self) -> Result<(), DriverError> {
+            self.calls.lock().unwrap().push("hide_keyboard".to_string());
             Ok(())
         }
 

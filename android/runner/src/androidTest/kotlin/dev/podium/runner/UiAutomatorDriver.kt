@@ -55,7 +55,7 @@ class UiAutomatorDriver(private val device: UiDevice) : Driver {
         try {
             val bySelector = selectorToBy(selector)
             val obj = device.findObject(bySelector)
-            if (obj == null) throw DriverException.ElementNotFound(reason = "Element not found: $selector")
+                ?: throw DriverException.ElementNotFound(reason = "Element not found: $selector")
             obj.click()
             device.waitForIdle(500)
         } catch (e: DriverException) {
@@ -67,28 +67,26 @@ class UiAutomatorDriver(private val device: UiDevice) : Driver {
 
     override fun inputText(text: String) {
         try {
-            // Wait for an EditText to gain focus — proxy for the IME being ready.
-            // Use a focused+class filter so we don't match non-editable focused views.
             val focused = device.wait(
                 Until.findObject(By.focused(true).clazz("android.widget.EditText")),
                 3000
             ) ?: throw DriverException.OperationFailed(reason = "No focused EditText within 3s")
-
-            // Wait for the IME window to attach before calling setText; without this,
-            // ACTION_SET_TEXT can silently no-op when the keyboard isn't up yet.
             Thread.sleep(300)
-
             focused.text = text
-
-            // Dismiss keyboard via shell — reliable on all Android versions and real devices.
-            // KEYCODE_ESCAPE (pressKeyCode) doesn't close the IME on Pixel/Android 13+.
-            // `input keyevent` targets whichever window has focus, which is the IME after setText.
-            device.executeShellCommand("input keyevent KEYCODE_BACK")
-            device.waitForIdle(500)
+            device.waitForIdle(300)
         } catch (e: DriverException) {
             throw e
         } catch (e: Exception) {
             throw DriverException.OperationFailed(reason = "inputText failed: ${e.message}")
+        }
+    }
+
+    override fun hideKeyboard() {
+        try {
+            device.executeShellCommand("input keyevent KEYCODE_BACK")
+            device.waitForIdle(500)
+        } catch (e: Exception) {
+            throw DriverException.OperationFailed(reason = "hideKeyboard failed: ${e.message}")
         }
     }
 

@@ -31,6 +31,9 @@ pub trait Driver: Send + Sync {
     /// Input text into the currently focused field
     fn input_text(&self, text: String) -> Result<(), DriverError>;
 
+    /// Dismiss the soft keyboard if it is visible
+    fn hide_keyboard(&self) -> Result<(), DriverError>;
+
     /// Swipe in the given direction
     fn swipe(&self, direction: Direction) -> Result<(), DriverError>;
 

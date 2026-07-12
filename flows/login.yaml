@@ -5,9 +5,11 @@ appId: dev.podium.sample
 - tapOn:
     id: "username"
 - inputText: "podium"
+- hideKeyboard
 - tapOn:
     id: "password"
 - inputText: "pass"
+- hideKeyboard
 - tapOn:
     id: "login_button"
 - assertVisible: "Welcome"
