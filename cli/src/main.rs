@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use reqwest::blocking::multipart;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -79,6 +80,57 @@ enum Cmd {
         /// Directory containing result JSON files
         dir: PathBuf,
     },
+    /// Upload APKs and trigger a run on a cloud device farm
+    Upload {
+        #[command(subcommand)]
+        target: UploadTarget,
+    },
+}
+
+#[derive(Subcommand)]
+enum UploadTarget {
+    /// Upload to BrowserStack App Automate and trigger an Espresso build
+    Browserstack {
+        /// BrowserStack username (falls back to BROWSERSTACK_USERNAME env var)
+        #[arg(long, env = "BROWSERSTACK_USERNAME")]
+        username: String,
+        /// BrowserStack access key (falls back to BROWSERSTACK_ACCESS_KEY env var)
+        #[arg(long, env = "BROWSERSTACK_ACCESS_KEY")]
+        access_key: String,
+        /// Path to the app APK (defaults to embedded APK)
+        #[arg(long)]
+        app: Option<PathBuf>,
+        /// Path to the runner APK (defaults to embedded APK)
+        #[arg(long)]
+        runner: Option<PathBuf>,
+        /// Comma-separated list of devices, e.g. "Google Pixel 7-13.0"
+        #[arg(long, default_value = "Google Pixel 7-13.0")]
+        devices: String,
+    },
+    /// Upload to Sauce Labs Real Device Cloud and trigger an Espresso job
+    Saucelabs {
+        /// Sauce Labs username (falls back to SAUCE_USERNAME env var)
+        #[arg(long, env = "SAUCE_USERNAME")]
+        username: String,
+        /// Sauce Labs access key (falls back to SAUCE_ACCESS_KEY env var)
+        #[arg(long, env = "SAUCE_ACCESS_KEY")]
+        access_key: String,
+        /// Path to the app APK (defaults to embedded APK)
+        #[arg(long)]
+        app: Option<PathBuf>,
+        /// Path to the runner APK (defaults to embedded APK)
+        #[arg(long)]
+        runner: Option<PathBuf>,
+        /// Sauce Labs region: us-west-1 or eu-central-1
+        #[arg(long, default_value = "us-west-1")]
+        region: String,
+        /// Device name as shown in the Sauce Labs catalog
+        #[arg(long, default_value = "Google Pixel 7 GoogleAPI Emulator")]
+        device: String,
+        /// Android platform version for the device
+        #[arg(long, default_value = "13")]
+        platform_version: String,
+    },
 }
 
 fn main() -> ExitCode {
@@ -101,6 +153,38 @@ fn main() -> ExitCode {
             &out,
         ),
         Cmd::Report { dir } => cmd_report(&dir),
+        Cmd::Upload { target } => match target {
+            UploadTarget::Browserstack {
+                username,
+                access_key,
+                app,
+                runner,
+                devices,
+            } => cmd_upload_browserstack(
+                &username,
+                &access_key,
+                app.as_deref(),
+                runner.as_deref(),
+                &devices,
+            ),
+            UploadTarget::Saucelabs {
+                username,
+                access_key,
+                app,
+                runner,
+                region,
+                device,
+                platform_version,
+            } => cmd_upload_saucelabs(
+                &username,
+                &access_key,
+                app.as_deref(),
+                runner.as_deref(),
+                &region,
+                &device,
+                &platform_version,
+            ),
+        },
     }
 }
 
@@ -406,6 +490,253 @@ fn adb(serial: Option<&str>, args: &[&str]) -> std::process::ExitStatus {
         // Return a fake failure status
         Command::new("false").status().unwrap()
     })
+}
+
+// ── upload: browserstack ─────────────────────────────────────────────────
+
+fn cmd_upload_browserstack(
+    username: &str,
+    access_key: &str,
+    app_apk: Option<&Path>,
+    runner_apk: Option<&Path>,
+    devices: &str,
+) -> ExitCode {
+    let (app_path, runner_path) = match resolve_upload_apks(app_apk, runner_apk) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let client = reqwest::blocking::Client::new();
+    let base = "https://api-cloud.browserstack.com/app-automate";
+
+    // 1. Upload app APK
+    println!("Uploading app APK…");
+    let app_url = match bs_upload(
+        &client,
+        username,
+        access_key,
+        &format!("{base}/upload"),
+        "file",
+        &app_path,
+        "app_url",
+    ) {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("Failed to upload app APK: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("  app_url: {app_url}");
+
+    // 2. Upload runner APK
+    println!("Uploading runner APK…");
+    let test_url = match bs_upload(
+        &client,
+        username,
+        access_key,
+        &format!("{base}/espresso/test-suite"),
+        "file",
+        &runner_path,
+        "test_suite_url",
+    ) {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("Failed to upload runner APK: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("  test_suite_url: {test_url}");
+
+    // 3. Trigger build
+    println!("Triggering build…");
+    let device_list: Vec<serde_json::Value> = devices
+        .split(',')
+        .map(|d| serde_json::json!(d.trim()))
+        .collect();
+    let payload = serde_json::json!({
+        "app": app_url,
+        "testSuite": test_url,
+        "devices": device_list,
+        "class": ["dev.podium.runner.FlowRunner"],
+        "logs": true,
+        "video": true,
+        "networkLogs": false,
+    });
+    let resp: serde_json::Value = match (|| -> Result<_, reqwest::Error> {
+        let r = client
+            .post(format!("{base}/espresso/v2/build"))
+            .basic_auth(username, Some(access_key))
+            .json(&payload)
+            .send()?
+            .error_for_status()?;
+        r.json()
+    })() {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Failed to trigger build: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let build_id = resp["build_id"].as_str().unwrap_or("unknown");
+    println!("\nBuild ID: {build_id}");
+    println!("Track at: https://app-automate.browserstack.com/builds/{build_id}");
+    ExitCode::SUCCESS
+}
+
+fn bs_upload(
+    client: &reqwest::blocking::Client,
+    username: &str,
+    access_key: &str,
+    url: &str,
+    field: &str,
+    path: &Path,
+    key: &str,
+) -> Result<String, String> {
+    let form = multipart::Form::new()
+        .file(field.to_string(), path)
+        .map_err(|e| e.to_string())?;
+    let resp: serde_json::Value = client
+        .post(url)
+        .basic_auth(username, Some(access_key))
+        .multipart(form)
+        .send()
+        .and_then(|r| r.error_for_status())
+        .and_then(|r| r.json())
+        .map_err(|e| e.to_string())?;
+    resp[key]
+        .as_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| format!("missing '{key}' in response: {resp}"))
+}
+
+// ── upload: saucelabs ────────────────────────────────────────────────────
+
+fn cmd_upload_saucelabs(
+    username: &str,
+    access_key: &str,
+    app_apk: Option<&Path>,
+    runner_apk: Option<&Path>,
+    region: &str,
+    device: &str,
+    platform_version: &str,
+) -> ExitCode {
+    let (app_path, runner_path) = match resolve_upload_apks(app_apk, runner_apk) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let client = reqwest::blocking::Client::new();
+    let api = format!("https://api.{region}.saucelabs.com");
+
+    // 1. Upload app APK
+    println!("Uploading app APK…");
+    let app_id = match sl_upload(
+        &client,
+        username,
+        access_key,
+        &format!("{api}/v1/storage/upload"),
+        &app_path,
+        "sampleapp-debug.apk",
+    ) {
+        Ok(id) => id,
+        Err(e) => {
+            eprintln!("Failed to upload app APK: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("  app id: {app_id}");
+
+    // 2. Upload runner APK
+    println!("Uploading runner APK…");
+    let runner_id = match sl_upload(
+        &client,
+        username,
+        access_key,
+        &format!("{api}/v1/storage/upload"),
+        &runner_path,
+        "runner-debug-androidTest.apk",
+    ) {
+        Ok(id) => id,
+        Err(e) => {
+            eprintln!("Failed to upload runner APK: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("  runner id: {runner_id}");
+
+    // 3. Trigger job
+    println!("Triggering job…");
+    let payload = serde_json::json!({
+        "kind": "espresso",
+        "app": format!("storage:{app_id}"),
+        "testApp": format!("storage:{runner_id}"),
+        "devices": [{"name": device, "platformVersion": platform_version}],
+        "testOptions": {"class": "dev.podium.runner.FlowRunner"},
+    });
+    let resp: serde_json::Value = match (|| -> Result<_, reqwest::Error> {
+        let r = client
+            .post(format!("{api}/v1/rdc/jobs"))
+            .basic_auth(username, Some(access_key))
+            .json(&payload)
+            .send()?
+            .error_for_status()?;
+        r.json()
+    })() {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Failed to trigger job: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let job_id = resp["job_id"].as_str().unwrap_or("unknown");
+    println!("\nJob ID: {job_id}");
+    println!("Track at: https://app.saucelabs.com/tests/{job_id}");
+    ExitCode::SUCCESS
+}
+
+fn sl_upload(
+    client: &reqwest::blocking::Client,
+    username: &str,
+    access_key: &str,
+    url: &str,
+    path: &Path,
+    name: &str,
+) -> Result<String, String> {
+    let form = multipart::Form::new()
+        .file("payload", path)
+        .map_err(|e| e.to_string())?
+        .text("name", name.to_string());
+    let resp: serde_json::Value = client
+        .post(url)
+        .basic_auth(username, Some(access_key))
+        .multipart(form)
+        .send()
+        .and_then(|r| r.error_for_status())
+        .and_then(|r| r.json())
+        .map_err(|e| e.to_string())?;
+    resp["item"]["id"]
+        .as_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| format!("missing 'item.id' in response: {resp}"))
+}
+
+// ── upload: shared helpers ────────────────────────────────────────────────
+
+fn resolve_upload_apks(
+    app_apk: Option<&Path>,
+    runner_apk: Option<&Path>,
+) -> Result<(PathBuf, PathBuf), String> {
+    let app_path = ensure_apk(app_apk, BUNDLED_SAMPLEAPP_APK, "sampleapp.apk")
+        .ok_or("No app APK available. Pass --app <path> or use a release build with embedded APKs.")?;
+    let runner_path = ensure_apk(runner_apk, BUNDLED_RUNNER_APK, "runner.apk")
+        .ok_or("No runner APK available. Pass --runner <path> or use a release build with embedded APKs.")?;
+    Ok((app_path, runner_path))
 }
 
 // ── report ────────────────────────────────────────────────────────────────

@@ -166,24 +166,18 @@ Requires: `BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY` (find them under
 export BROWSERSTACK_USERNAME=your_username
 export BROWSERSTACK_ACCESS_KEY=your_access_key
 
-# Optional overrides — defaults point to the locally-built APKs
-# export APP_APK=path/to/sampleapp-debug.apk
-# export RUNNER_APK=path/to/runner-debug-androidTest.apk
-# export DEVICES="Samsung Galaxy S23-13.0"   # default: Google Pixel 7-13.0
-
-bash scripts/upload-browserstack.sh
+podium upload browserstack
 ```
 
-The script:
-1. Uploads the app APK and gets an `app_url`.
-2. Uploads the runner APK as the Espresso test suite and gets a `test_suite_url`.
-3. Triggers a build targeting the specified device(s) with `class: dev.podium.runner.FlowRunner`.
-4. Prints a build ID and a direct link to the App Automate dashboard.
+Credentials are read from env vars automatically; no flags needed for the common case. The command uploads the embedded APKs, triggers a build, and prints a direct App Automate dashboard link.
 
-To run against multiple devices in parallel, set `DEVICES` to a comma-separated list:
+To target a different device or override which APKs are used:
 
 ```bash
-DEVICES="Google Pixel 7-13.0,Samsung Galaxy S23-13.0" bash scripts/upload-browserstack.sh
+podium upload browserstack \
+  --devices "Samsung Galaxy S23-13.0,Google Pixel 7-13.0" \
+  --app path/to/sampleapp.apk \
+  --runner path/to/runner.apk
 ```
 
 ### Sauce Labs
@@ -194,19 +188,19 @@ Requires: `SAUCE_USERNAME` and `SAUCE_ACCESS_KEY` (find them under User Settings
 export SAUCE_USERNAME=your_username
 export SAUCE_ACCESS_KEY=your_access_key
 
-# Optional overrides
-# export SAUCE_REGION=eu-central-1              # default: us-west-1
-# export DEVICE_NAME="Samsung Galaxy S23"
-# export PLATFORM_VERSION=13
-# export APP_APK=path/to/sampleapp-debug.apk
-# export RUNNER_APK=path/to/runner-debug-androidTest.apk
-
-bash scripts/upload-saucelabs.sh
+podium upload saucelabs
 ```
 
-The script uploads the app and runner APKs to Sauce Storage, triggers an Espresso job targeting the specified device, and prints a job ID and a direct link to the Sauce Labs dashboard.
+To target a specific device or region:
 
-Replace the default device by setting `DEVICE_NAME` and `PLATFORM_VERSION` to any entry from the [Sauce Labs device catalog](https://app.saucelabs.com/live/web-testing/virtual).
+```bash
+podium upload saucelabs \
+  --region eu-central-1 \
+  --device "Samsung Galaxy S23" \
+  --platform-version 13
+```
+
+Replace the default device with any entry from the [Sauce Labs device catalog](https://app.saucelabs.com/live/web-testing/virtual).
 
 ### How it works on cloud farms
 
