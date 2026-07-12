@@ -190,42 +190,23 @@ DEVICES="Google Pixel 7-13.0,Samsung Galaxy S23-13.0" bash scripts/upload-browse
 
 Requires: `SAUCE_USERNAME` and `SAUCE_ACCESS_KEY` (find them under User Settings → Access Key).
 
-Sauce Labs uses the same two-step upload-then-trigger pattern via their [Espresso endpoint](https://docs.saucelabs.com/mobile-apps/automated-testing/espresso-xcuitest/).
-
 ```bash
 export SAUCE_USERNAME=your_username
 export SAUCE_ACCESS_KEY=your_access_key
-export SAUCE_REGION=us-west-1   # or eu-central-1
 
-APP_APK=android/sampleapp/build/outputs/apk/debug/sampleapp-debug.apk
-RUNNER_APK=android/runner/build/outputs/apk/androidTest/debug/runner-debug-androidTest.apk
+# Optional overrides
+# export SAUCE_REGION=eu-central-1              # default: us-west-1
+# export DEVICE_NAME="Samsung Galaxy S23"
+# export PLATFORM_VERSION=13
+# export APP_APK=path/to/sampleapp-debug.apk
+# export RUNNER_APK=path/to/runner-debug-androidTest.apk
 
-# 1. Upload app APK
-APP_ID=$(curl -s -u "$SAUCE_USERNAME:$SAUCE_ACCESS_KEY" \
-  -X POST "https://api.$SAUCE_REGION.saucelabs.com/v1/storage/upload" \
-  -F "payload=@$APP_APK" -F "name=sampleapp-debug.apk" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['item']['id'])")
-
-# 2. Upload runner APK (Espresso test suite)
-RUNNER_ID=$(curl -s -u "$SAUCE_USERNAME:$SAUCE_ACCESS_KEY" \
-  -X POST "https://api.$SAUCE_REGION.saucelabs.com/v1/storage/upload" \
-  -F "payload=@$RUNNER_APK" -F "name=runner-debug-androidTest.apk" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['item']['id'])")
-
-# 3. Trigger a run
-curl -s -u "$SAUCE_USERNAME:$SAUCE_ACCESS_KEY" \
-  -X POST "https://api.$SAUCE_REGION.saucelabs.com/v1/rdc/jobs" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"kind\": \"espresso\",
-    \"app\": \"storage:$APP_ID\",
-    \"testApp\": \"storage:$RUNNER_ID\",
-    \"devices\": [{\"name\": \"Google Pixel 7 GoogleAPI Emulator\", \"platformVersion\": \"13\"}],
-    \"testOptions\": {\"class\": \"dev.podium.runner.FlowRunner\"}
-  }" | python3 -m json.tool
+bash scripts/upload-saucelabs.sh
 ```
 
-Replace the `devices` entry with any device from the [Sauce Labs real device catalog](https://app.saucelabs.com/live/web-testing/virtual).
+The script uploads the app and runner APKs to Sauce Storage, triggers an Espresso job targeting the specified device, and prints a job ID and a direct link to the Sauce Labs dashboard.
+
+Replace the default device by setting `DEVICE_NAME` and `PLATFORM_VERSION` to any entry from the [Sauce Labs device catalog](https://app.saucelabs.com/live/web-testing/virtual).
 
 ### How it works on cloud farms
 
