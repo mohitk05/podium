@@ -80,11 +80,18 @@ class UiAutomatorDriver(private val device: UiDevice) : Driver {
 
             focused.text = text
 
-            // Dismiss keyboard via shell — reliable on all Android versions and real devices.
-            // KEYCODE_ESCAPE (pressKeyCode) doesn't close the IME on Pixel/Android 13+.
-            // `input keyevent` targets whichever window has focus, which is the IME after setText.
+            // Dismiss keyboard via KEYCODE_BACK — same mechanism Maestro uses on Android.
+            // `input keyevent` targets the focused window (the IME after setText).
             device.executeShellCommand("input keyevent KEYCODE_BACK")
             device.waitForIdle(500)
+
+            // Verify the keyboard is actually gone by checking dumpsys window — if the IME
+            // window is still listed as visible, send KEYCODE_BACK once more.
+            val windows = device.executeShellCommand("dumpsys window windows")
+            if (windows.contains("mInputMethodWindow") && windows.contains("isVisible=true")) {
+                device.executeShellCommand("input keyevent KEYCODE_BACK")
+                device.waitForIdle(500)
+            }
         } catch (e: DriverException) {
             throw e
         } catch (e: Exception) {
