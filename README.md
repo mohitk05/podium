@@ -154,6 +154,88 @@ podium test flows/smoke.yaml
 bash scripts/run-local.sh
 ```
 
+## Running on cloud device farms
+
+Podium's runner APK is a standard Espresso instrumentation APK. Every cloud farm that accepts Espresso APKs via their native endpoint works without any Podium-specific plugin.
+
+### BrowserStack App Automate
+
+Requires: `BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY` (find them under [Account → Settings](https://www.browserstack.com/accounts/settings)).
+
+```bash
+export BROWSERSTACK_USERNAME=your_username
+export BROWSERSTACK_ACCESS_KEY=your_access_key
+
+# Optional overrides — defaults point to the locally-built APKs
+# export APP_APK=path/to/sampleapp-debug.apk
+# export RUNNER_APK=path/to/runner-debug-androidTest.apk
+# export DEVICES="Samsung Galaxy S23-13.0"   # default: Google Pixel 7-13.0
+
+bash scripts/upload-browserstack.sh
+```
+
+The script:
+1. Uploads the app APK and gets an `app_url`.
+2. Uploads the runner APK as the Espresso test suite and gets a `test_suite_url`.
+3. Triggers a build targeting the specified device(s) with `class: dev.podium.runner.FlowRunner`.
+4. Prints a build ID and a direct link to the App Automate dashboard.
+
+To run against multiple devices in parallel, set `DEVICES` to a comma-separated list:
+
+```bash
+DEVICES="Google Pixel 7-13.0,Samsung Galaxy S23-13.0" bash scripts/upload-browserstack.sh
+```
+
+### Sauce Labs
+
+Requires: `SAUCE_USERNAME` and `SAUCE_ACCESS_KEY` (find them under User Settings → Access Key).
+
+Sauce Labs uses the same two-step upload-then-trigger pattern via their [Espresso endpoint](https://docs.saucelabs.com/mobile-apps/automated-testing/espresso-xcuitest/).
+
+```bash
+export SAUCE_USERNAME=your_username
+export SAUCE_ACCESS_KEY=your_access_key
+export SAUCE_REGION=us-west-1   # or eu-central-1
+
+APP_APK=android/sampleapp/build/outputs/apk/debug/sampleapp-debug.apk
+RUNNER_APK=android/runner/build/outputs/apk/androidTest/debug/runner-debug-androidTest.apk
+
+# 1. Upload app APK
+APP_ID=$(curl -s -u "$SAUCE_USERNAME:$SAUCE_ACCESS_KEY" \
+  -X POST "https://api.$SAUCE_REGION.saucelabs.com/v1/storage/upload" \
+  -F "payload=@$APP_APK" -F "name=sampleapp-debug.apk" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['item']['id'])")
+
+# 2. Upload runner APK (Espresso test suite)
+RUNNER_ID=$(curl -s -u "$SAUCE_USERNAME:$SAUCE_ACCESS_KEY" \
+  -X POST "https://api.$SAUCE_REGION.saucelabs.com/v1/storage/upload" \
+  -F "payload=@$RUNNER_APK" -F "name=runner-debug-androidTest.apk" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['item']['id'])")
+
+# 3. Trigger a run
+curl -s -u "$SAUCE_USERNAME:$SAUCE_ACCESS_KEY" \
+  -X POST "https://api.$SAUCE_REGION.saucelabs.com/v1/rdc/jobs" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"kind\": \"espresso\",
+    \"app\": \"storage:$APP_ID\",
+    \"testApp\": \"storage:$RUNNER_ID\",
+    \"devices\": [{\"name\": \"Google Pixel 7 GoogleAPI Emulator\", \"platformVersion\": \"13\"}],
+    \"testOptions\": {\"class\": \"dev.podium.runner.FlowRunner\"}
+  }" | python3 -m json.tool
+```
+
+Replace the `devices` entry with any device from the [Sauce Labs real device catalog](https://app.saucelabs.com/live/web-testing/virtual).
+
+### How it works on cloud farms
+
+The runner APK IS the Espresso test suite — there is no separate test framework. When the farm invokes `am instrument`, the runner:
+1. Reads the flow YAML files pushed to the device (or uses flows baked in at build time).
+2. Executes each step via UIAutomator2 entirely on-device with zero network round-trips.
+3. Reports results through the standard instrumentation output that every Espresso-compatible farm already understands.
+
+The only constraint is **ABI coverage**: real devices require the `arm64-v8a` native library in the runner APK. The release build includes both `arm64-v8a` and `x86_64` ABIs, so it runs on both real devices and x86 cloud emulators.
+
 ## Command Reference
 
 ### `podium validate <flows>`
