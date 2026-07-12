@@ -21,14 +21,10 @@ class UiAutomatorDriver(private val device: UiDevice) : Driver {
         try {
             if (clearState) {
                 device.executeShellCommand("pm clear $appId")
-                Thread.sleep(500)
+                Thread.sleep(500) // Wait for clear to complete
             }
 
-            // Lock to portrait before launch — prevents random orientation events
-            // from rotating the device mid-test on real devices.
-            device.executeShellCommand("settings put system accelerometer_rotation 0")
-            device.executeShellCommand("settings put system user_rotation 0")
-
+            // Use shell command to launch
             val launchCmd = "monkey -p $appId -c android.intent.category.LAUNCHER 1"
             val result = device.executeShellCommand(launchCmd)
 
@@ -36,6 +32,7 @@ class UiAutomatorDriver(private val device: UiDevice) : Driver {
                 throw DriverException.OperationFailed(reason = "Failed to launch $appId: $result")
             }
 
+            // Wait for app to start
             Thread.sleep(1000)
             device.waitForIdle(3000)
         } catch (e: DriverException) {
@@ -86,15 +83,8 @@ class UiAutomatorDriver(private val device: UiDevice) : Driver {
 
     override fun hideKeyboard() {
         try {
-            // Only send KEYCODE_BACK if the IME window is actually showing —
-            // sending it unconditionally on real devices can trigger the activity's
-            // back handler instead of dismissing the keyboard.
-            val imeVisible = device.executeShellCommand("dumpsys input_method")
-                .contains("mInputShown=true")
-            if (imeVisible) {
-                device.executeShellCommand("input keyevent KEYCODE_BACK")
-                device.waitForIdle(500)
-            }
+            device.executeShellCommand("input keyevent KEYCODE_BACK")
+            device.waitForIdle(500)
         } catch (e: Exception) {
             throw DriverException.OperationFailed(reason = "hideKeyboard failed: ${e.message}")
         }
