@@ -667,35 +667,39 @@ internal interface UniffiCallbackInterfaceDriverMethod3 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`text`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
 internal interface UniffiCallbackInterfaceDriverMethod4 : com.sun.jna.Callback {
-    fun callback(`uniffiHandle`: Long,`direction`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
-}
-internal interface UniffiCallbackInterfaceDriverMethod5 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
+internal interface UniffiCallbackInterfaceDriverMethod5 : com.sun.jna.Callback {
+    fun callback(`uniffiHandle`: Long,`direction`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
+}
 internal interface UniffiCallbackInterfaceDriverMethod6 : com.sun.jna.Callback {
-    fun callback(`uniffiHandle`: Long,`timeoutMs`: Long,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
+    fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
 internal interface UniffiCallbackInterfaceDriverMethod7 : com.sun.jna.Callback {
-    fun callback(`uniffiHandle`: Long,`name`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
+    fun callback(`uniffiHandle`: Long,`timeoutMs`: Long,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
 internal interface UniffiCallbackInterfaceDriverMethod8 : com.sun.jna.Callback {
-    fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: LongByReference,uniffiCallStatus: UniffiRustCallStatus,)
+    fun callback(`uniffiHandle`: Long,`name`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
 internal interface UniffiCallbackInterfaceDriverMethod9 : com.sun.jna.Callback {
+    fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: LongByReference,uniffiCallStatus: UniffiRustCallStatus,)
+}
+internal interface UniffiCallbackInterfaceDriverMethod10 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`ms`: Long,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,)
 }
-@Structure.FieldOrder("launchApp", "isVisible", "tap", "inputText", "swipe", "back", "waitForIdle", "takeScreenshot", "nowMs", "sleepMs", "uniffiFree")
+@Structure.FieldOrder("launchApp", "isVisible", "tap", "inputText", "hideKeyboard", "swipe", "back", "waitForIdle", "takeScreenshot", "nowMs", "sleepMs", "uniffiFree")
 internal open class UniffiVTableCallbackInterfaceDriver(
     @JvmField internal var `launchApp`: UniffiCallbackInterfaceDriverMethod0? = null,
     @JvmField internal var `isVisible`: UniffiCallbackInterfaceDriverMethod1? = null,
     @JvmField internal var `tap`: UniffiCallbackInterfaceDriverMethod2? = null,
     @JvmField internal var `inputText`: UniffiCallbackInterfaceDriverMethod3? = null,
-    @JvmField internal var `swipe`: UniffiCallbackInterfaceDriverMethod4? = null,
-    @JvmField internal var `back`: UniffiCallbackInterfaceDriverMethod5? = null,
-    @JvmField internal var `waitForIdle`: UniffiCallbackInterfaceDriverMethod6? = null,
-    @JvmField internal var `takeScreenshot`: UniffiCallbackInterfaceDriverMethod7? = null,
-    @JvmField internal var `nowMs`: UniffiCallbackInterfaceDriverMethod8? = null,
-    @JvmField internal var `sleepMs`: UniffiCallbackInterfaceDriverMethod9? = null,
+    @JvmField internal var `hideKeyboard`: UniffiCallbackInterfaceDriverMethod4? = null,
+    @JvmField internal var `swipe`: UniffiCallbackInterfaceDriverMethod5? = null,
+    @JvmField internal var `back`: UniffiCallbackInterfaceDriverMethod6? = null,
+    @JvmField internal var `waitForIdle`: UniffiCallbackInterfaceDriverMethod7? = null,
+    @JvmField internal var `takeScreenshot`: UniffiCallbackInterfaceDriverMethod8? = null,
+    @JvmField internal var `nowMs`: UniffiCallbackInterfaceDriverMethod9? = null,
+    @JvmField internal var `sleepMs`: UniffiCallbackInterfaceDriverMethod10? = null,
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
 ) : Structure() {
     class UniffiByValue(
@@ -703,20 +707,22 @@ internal open class UniffiVTableCallbackInterfaceDriver(
         `isVisible`: UniffiCallbackInterfaceDriverMethod1? = null,
         `tap`: UniffiCallbackInterfaceDriverMethod2? = null,
         `inputText`: UniffiCallbackInterfaceDriverMethod3? = null,
-        `swipe`: UniffiCallbackInterfaceDriverMethod4? = null,
-        `back`: UniffiCallbackInterfaceDriverMethod5? = null,
-        `waitForIdle`: UniffiCallbackInterfaceDriverMethod6? = null,
-        `takeScreenshot`: UniffiCallbackInterfaceDriverMethod7? = null,
-        `nowMs`: UniffiCallbackInterfaceDriverMethod8? = null,
-        `sleepMs`: UniffiCallbackInterfaceDriverMethod9? = null,
+        `hideKeyboard`: UniffiCallbackInterfaceDriverMethod4? = null,
+        `swipe`: UniffiCallbackInterfaceDriverMethod5? = null,
+        `back`: UniffiCallbackInterfaceDriverMethod6? = null,
+        `waitForIdle`: UniffiCallbackInterfaceDriverMethod7? = null,
+        `takeScreenshot`: UniffiCallbackInterfaceDriverMethod8? = null,
+        `nowMs`: UniffiCallbackInterfaceDriverMethod9? = null,
+        `sleepMs`: UniffiCallbackInterfaceDriverMethod10? = null,
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
-    ): UniffiVTableCallbackInterfaceDriver(`launchApp`,`isVisible`,`tap`,`inputText`,`swipe`,`back`,`waitForIdle`,`takeScreenshot`,`nowMs`,`sleepMs`,`uniffiFree`,), Structure.ByValue
+    ): UniffiVTableCallbackInterfaceDriver(`launchApp`,`isVisible`,`tap`,`inputText`,`hideKeyboard`,`swipe`,`back`,`waitForIdle`,`takeScreenshot`,`nowMs`,`sleepMs`,`uniffiFree`,), Structure.ByValue
 
    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceDriver) {
         `launchApp` = other.`launchApp`
         `isVisible` = other.`isVisible`
         `tap` = other.`tap`
         `inputText` = other.`inputText`
+        `hideKeyboard` = other.`hideKeyboard`
         `swipe` = other.`swipe`
         `back` = other.`back`
         `waitForIdle` = other.`waitForIdle`
@@ -727,6 +733,8 @@ internal open class UniffiVTableCallbackInterfaceDriver(
     }
 
 }
+
+
 
 
 
@@ -843,6 +851,8 @@ fun uniffi_podium_core_checksum_method_driver_tap(
 ): Short
 fun uniffi_podium_core_checksum_method_driver_input_text(
 ): Short
+fun uniffi_podium_core_checksum_method_driver_hide_keyboard(
+): Short
 fun uniffi_podium_core_checksum_method_driver_swipe(
 ): Short
 fun uniffi_podium_core_checksum_method_driver_back(
@@ -918,6 +928,8 @@ fun uniffi_podium_core_fn_method_driver_is_visible(`ptr`: Pointer,`selector`: Ru
 fun uniffi_podium_core_fn_method_driver_tap(`ptr`: Pointer,`selector`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_podium_core_fn_method_driver_input_text(`ptr`: Pointer,`text`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_podium_core_fn_method_driver_hide_keyboard(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_podium_core_fn_method_driver_swipe(`ptr`: Pointer,`direction`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
@@ -1084,22 +1096,25 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_podium_core_checksum_method_driver_input_text() != 26854.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_podium_core_checksum_method_driver_swipe() != 13877.toShort()) {
+    if (lib.uniffi_podium_core_checksum_method_driver_hide_keyboard() != 28302.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_podium_core_checksum_method_driver_back() != 17813.toShort()) {
+    if (lib.uniffi_podium_core_checksum_method_driver_swipe() != 35929.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_podium_core_checksum_method_driver_wait_for_idle() != 18413.toShort()) {
+    if (lib.uniffi_podium_core_checksum_method_driver_back() != 691.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_podium_core_checksum_method_driver_take_screenshot() != 32070.toShort()) {
+    if (lib.uniffi_podium_core_checksum_method_driver_wait_for_idle() != 4432.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_podium_core_checksum_method_driver_now_ms() != 43921.toShort()) {
+    if (lib.uniffi_podium_core_checksum_method_driver_take_screenshot() != 13550.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_podium_core_checksum_method_driver_sleep_ms() != 51875.toShort()) {
+    if (lib.uniffi_podium_core_checksum_method_driver_now_ms() != 34728.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_podium_core_checksum_method_driver_sleep_ms() != 32481.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -1530,6 +1545,11 @@ public interface Driver {
     fun `inputText`(`text`: kotlin.String)
     
     /**
+     * Dismiss the soft keyboard if it is visible
+     */
+    fun `hideKeyboard`()
+    
+    /**
      * Swipe in the given direction
      */
     fun `swipe`(`direction`: Direction)
@@ -1713,6 +1733,21 @@ open class DriverImpl: Disposable, AutoCloseable, Driver
 
     
     /**
+     * Dismiss the soft keyboard if it is visible
+     */
+    @Throws(DriverException::class)override fun `hideKeyboard`()
+        = 
+    callWithPointer {
+    uniffiRustCallWithError(DriverException) { _status ->
+    UniffiLib.INSTANCE.uniffi_podium_core_fn_method_driver_hide_keyboard(
+        it, _status)
+}
+    }
+    
+    
+
+    
+    /**
      * Swipe in the given direction
      */
     @Throws(DriverException::class)override fun `swipe`(`direction`: Direction)
@@ -1880,7 +1915,23 @@ internal object uniffiCallbackInterfaceDriver {
             )
         }
     }
-    internal object `swipe`: UniffiCallbackInterfaceDriverMethod4 {
+    internal object `hideKeyboard`: UniffiCallbackInterfaceDriverMethod4 {
+        override fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
+            val uniffiObj = FfiConverterTypeDriver.handleMap.get(uniffiHandle)
+            val makeCall = { ->
+                uniffiObj.`hideKeyboard`(
+                )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCallWithError(
+                uniffiCallStatus,
+                makeCall,
+                writeReturn,
+                { e: DriverException -> FfiConverterTypeDriverError.lower(e) }
+            )
+        }
+    }
+    internal object `swipe`: UniffiCallbackInterfaceDriverMethod5 {
         override fun callback(`uniffiHandle`: Long,`direction`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
             val uniffiObj = FfiConverterTypeDriver.handleMap.get(uniffiHandle)
             val makeCall = { ->
@@ -1897,7 +1948,7 @@ internal object uniffiCallbackInterfaceDriver {
             )
         }
     }
-    internal object `back`: UniffiCallbackInterfaceDriverMethod5 {
+    internal object `back`: UniffiCallbackInterfaceDriverMethod6 {
         override fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
             val uniffiObj = FfiConverterTypeDriver.handleMap.get(uniffiHandle)
             val makeCall = { ->
@@ -1913,7 +1964,7 @@ internal object uniffiCallbackInterfaceDriver {
             )
         }
     }
-    internal object `waitForIdle`: UniffiCallbackInterfaceDriverMethod6 {
+    internal object `waitForIdle`: UniffiCallbackInterfaceDriverMethod7 {
         override fun callback(`uniffiHandle`: Long,`timeoutMs`: Long,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
             val uniffiObj = FfiConverterTypeDriver.handleMap.get(uniffiHandle)
             val makeCall = { ->
@@ -1930,7 +1981,7 @@ internal object uniffiCallbackInterfaceDriver {
             )
         }
     }
-    internal object `takeScreenshot`: UniffiCallbackInterfaceDriverMethod7 {
+    internal object `takeScreenshot`: UniffiCallbackInterfaceDriverMethod8 {
         override fun callback(`uniffiHandle`: Long,`name`: RustBuffer.ByValue,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
             val uniffiObj = FfiConverterTypeDriver.handleMap.get(uniffiHandle)
             val makeCall = { ->
@@ -1947,7 +1998,7 @@ internal object uniffiCallbackInterfaceDriver {
             )
         }
     }
-    internal object `nowMs`: UniffiCallbackInterfaceDriverMethod8 {
+    internal object `nowMs`: UniffiCallbackInterfaceDriverMethod9 {
         override fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: LongByReference,uniffiCallStatus: UniffiRustCallStatus,) {
             val uniffiObj = FfiConverterTypeDriver.handleMap.get(uniffiHandle)
             val makeCall = { ->
@@ -1958,7 +2009,7 @@ internal object uniffiCallbackInterfaceDriver {
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
         }
     }
-    internal object `sleepMs`: UniffiCallbackInterfaceDriverMethod9 {
+    internal object `sleepMs`: UniffiCallbackInterfaceDriverMethod10 {
         override fun callback(`uniffiHandle`: Long,`ms`: Long,`uniffiOutReturn`: Pointer,uniffiCallStatus: UniffiRustCallStatus,) {
             val uniffiObj = FfiConverterTypeDriver.handleMap.get(uniffiHandle)
             val makeCall = { ->
@@ -1982,6 +2033,7 @@ internal object uniffiCallbackInterfaceDriver {
         `isVisible`,
         `tap`,
         `inputText`,
+        `hideKeyboard`,
         `swipe`,
         `back`,
         `waitForIdle`,
@@ -2223,6 +2275,9 @@ sealed class Command {
         companion object
     }
     
+    object HideKeyboard : Command()
+    
+    
 
     
     companion object
@@ -2266,6 +2321,7 @@ public object FfiConverterTypeCommand : FfiConverterRustBuffer<Command>{
             10 -> Command.TakeScreenshot(
                 FfiConverterString.read(buf),
                 )
+            11 -> Command.HideKeyboard
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
     }
@@ -2344,6 +2400,12 @@ public object FfiConverterTypeCommand : FfiConverterRustBuffer<Command>{
                 + FfiConverterString.allocationSize(value.`name`)
             )
         }
+        is Command.HideKeyboard -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
     }
 
     override fun write(value: Command, buf: ByteBuffer) {
@@ -2399,6 +2461,10 @@ public object FfiConverterTypeCommand : FfiConverterRustBuffer<Command>{
             is Command.TakeScreenshot -> {
                 buf.putInt(10)
                 FfiConverterString.write(value.`name`, buf)
+                Unit
+            }
+            is Command.HideKeyboard -> {
+                buf.putInt(11)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
