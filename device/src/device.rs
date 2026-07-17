@@ -45,6 +45,11 @@ impl PodiumDevice {
         DeviceBuilder { platform: None }
     }
 
+    #[cfg(feature = "mock")]
+    pub fn from_mock(mock: std::sync::Arc<crate::mock::MockTransport>) -> Self {
+        PodiumDevice { transport: mock as Arc<dyn Transport> }
+    }
+
     pub async fn launch_app(&self, app_id: &str, clear_state: bool) -> Result<(), PodiumError> {
         self.transport.launch_app(app_id, clear_state).await.map_err(Into::into)
     }

@@ -12,3 +12,6 @@ pub mod mock;
 pub use device::{DeviceBuilder, Platform, PodiumDevice};
 pub use error::PodiumError;
 pub use types::{Direction, Selector};
+
+#[cfg(feature = "mock")]
+pub use mock::MockTransport;
