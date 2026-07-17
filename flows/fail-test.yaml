@@ -1,8 +1,0 @@
-appId: dev.podium.sample
----
-- launchApp:
-    clearState: true
-- assertVisible:
-    text: "NonExistentElement"
-    timeout: 3000
-- tapOn: "Log in"
