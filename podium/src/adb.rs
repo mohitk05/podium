@@ -18,6 +18,10 @@ use proto::{
 
 const MAESTRO_RUNNER: &str =
     "dev.mobile.maestro.test/androidx.test.runner.AndroidJUnitRunner";
+const MAESTRO_PACKAGE: &str = "dev.mobile.maestro.test";
+const MAESTRO_SERVER_APK: &[u8] = include_bytes!("maestro-server.apk");
+// Sourced from Maestro cli-2.6.1 (Apache-2.0): maestro-client.jar/maestro-server.apk
+const MAESTRO_VERSION: &str = "2.6.1";
 const STARTUP_TIMEOUT_MS: u64 = 30_000;
 const STARTUP_POLL_MS: u64 = 200;
 
@@ -33,7 +37,10 @@ impl AdbTransport {
         serial: Option<String>,
         port: u16,
     ) -> Result<Self, TransportError> {
-        // 1. Forward the port
+        // 1. Install driver APK if not already present
+        ensure_driver_installed(&serial).await?;
+
+        // 2. Forward the port
         adb_cmd(&serial, &["forward", &format!("tcp:{port}"), &format!("tcp:{port}")])
             .status()
             .await
@@ -41,7 +48,7 @@ impl AdbTransport {
                 reason: format!("adb forward: {e}"),
             })?;
 
-        // 2. Start on-device gRPC server in background — don't await exit
+        // 3. Start on-device gRPC server in background — don't await exit
         adb_cmd(
             &serial,
             &[
@@ -63,7 +70,7 @@ impl AdbTransport {
             reason: format!("am instrument spawn: {e}"),
         })?;
 
-        // 3. Wait for gRPC server to accept TCP connections
+        // 4. Wait for gRPC server to accept TCP connections
         let deadline =
             std::time::Instant::now() + std::time::Duration::from_millis(STARTUP_TIMEOUT_MS);
         loop {
@@ -83,7 +90,7 @@ impl AdbTransport {
             tokio::time::sleep(std::time::Duration::from_millis(STARTUP_POLL_MS)).await;
         }
 
-        // 4. Open tonic channel
+        // 5. Open tonic channel
         let endpoint = format!("http://127.0.0.1:{port}");
         let channel = Channel::from_shared(endpoint)
             .map_err(|e| TransportError::OperationFailed {
@@ -118,6 +125,45 @@ impl AdbTransport {
             })?;
         Ok(resp.into_inner().hierarchy)
     }
+}
+
+async fn ensure_driver_installed(serial: &Option<String>) -> Result<(), TransportError> {
+    let output = adb_cmd(serial, &["shell", "pm", "list", "packages", MAESTRO_PACKAGE])
+        .output()
+        .await
+        .map_err(|e| TransportError::OperationFailed {
+            reason: format!("pm list packages: {e}"),
+        })?;
+
+    if String::from_utf8_lossy(&output.stdout).contains(MAESTRO_PACKAGE) {
+        return Ok(());
+    }
+
+    eprintln!("podium: installing Maestro driver APK v{MAESTRO_VERSION}...");
+
+    let tmp = std::env::temp_dir().join(format!("maestro-server-{MAESTRO_VERSION}.apk"));
+    tokio::fs::write(&tmp, MAESTRO_SERVER_APK)
+        .await
+        .map_err(|e| TransportError::OperationFailed {
+            reason: format!("write driver APK: {e}"),
+        })?;
+
+    let status = adb_cmd(serial, &["install", "-r", tmp.to_str().unwrap()])
+        .status()
+        .await
+        .map_err(|e| TransportError::OperationFailed {
+            reason: format!("adb install: {e}"),
+        })?;
+
+    let _ = tokio::fs::remove_file(&tmp).await;
+
+    if !status.success() {
+        return Err(TransportError::OperationFailed {
+            reason: "adb install of Maestro driver APK failed".into(),
+        });
+    }
+
+    Ok(())
 }
 
 fn adb_cmd(serial: &Option<String>, args: &[&str]) -> Command {
