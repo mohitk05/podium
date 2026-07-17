@@ -1,176 +1,266 @@
 use crate::error::TransportError;
+use crate::hierarchy::find_element;
 use crate::transport::Transport;
 use crate::types::{Direction, Selector};
 use async_trait::async_trait;
 use tokio::process::Command;
+use tonic::transport::Channel;
 
-const DEVICE_DIR: &str = "/data/local/tmp/podium/cmd";
-const RUNNER: &str = "dev.podium.runner.test/androidx.test.runner.AndroidJUnitRunner";
-const RESULTS_DIR: &str = "/sdcard/Android/data/dev.podium.runner.test/files/podium/results";
+pub(crate) mod proto {
+    include!(concat!(env!("OUT_DIR"), "/maestro_android.rs"));
+}
+
+use proto::maestro_driver_client::MaestroDriverClient;
+use proto::{
+    CheckWindowUpdatingRequest, InputTextRequest, LaunchAppRequest, ScreenshotRequest,
+    TapRequest, ViewHierarchyRequest,
+};
+
+const MAESTRO_RUNNER: &str =
+    "dev.mobile.maestro.test/androidx.test.runner.AndroidJUnitRunner";
+const STARTUP_TIMEOUT_MS: u64 = 30_000;
+const STARTUP_POLL_MS: u64 = 200;
 
 pub(crate) struct AdbTransport {
-    pub(crate) serial: Option<String>,
-    pub(crate) app_id: String,
+    serial: Option<String>,
+    #[allow(dead_code)]
+    port: u16,
+    client: MaestroDriverClient<Channel>,
 }
 
 impl AdbTransport {
-    fn adb(&self) -> Command {
-        let mut cmd = Command::new("adb");
-        if let Some(s) = &self.serial {
-            cmd.args(["-s", s]);
-        }
-        cmd
-    }
+    pub(crate) async fn connect(
+        serial: Option<String>,
+        port: u16,
+    ) -> Result<Self, TransportError> {
+        // 1. Forward the port
+        adb_cmd(&serial, &["forward", &format!("tcp:{port}"), &format!("tcp:{port}")])
+            .status()
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("adb forward: {e}"),
+            })?;
 
-    async fn run_flow(&self, flow_name: &str, yaml: &str) -> Result<(), TransportError> {
-        let flow_file = format!("{DEVICE_DIR}/{flow_name}.yaml");
+        // 2. Start on-device gRPC server in background — don't await exit
+        adb_cmd(
+            &serial,
+            &[
+                "shell",
+                "am",
+                "instrument",
+                "-w",
+                "-e",
+                "class",
+                "dev.mobile.maestro.MaestroDriverService#grpcServer",
+                "-e",
+                "port",
+                &port.to_string(),
+                MAESTRO_RUNNER,
+            ],
+        )
+        .spawn()
+        .map_err(|e| TransportError::OperationFailed {
+            reason: format!("am instrument spawn: {e}"),
+        })?;
 
-        // Push the YAML to the device
-        let local = self.write_temp_yaml(flow_name, yaml).await?;
-        let push_ok = self.adb()
-            .args(["push", &local, &flow_file])
-            .status().await
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if !push_ok {
-            return Err(TransportError::OperationFailed { reason: format!("adb push failed for {flow_name}") });
-        }
-
-        // Run the single flow via am instrument
-        let output = self.adb()
-            .args([
-                "shell", "am", "instrument", "-w", "-r",
-                "-e", "flowsDir", DEVICE_DIR,
-                "-e", "flowFilter", flow_name,
-                RUNNER,
-            ])
-            .output().await
-            .map_err(|e| TransportError::OperationFailed { reason: format!("am instrument failed: {e}") })?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if stdout.contains("INSTRUMENTATION_STATUS_CODE: -2") || stdout.contains("FAILURES!!!") {
-            let reason = self.pull_failure_reason(flow_name).await
-                .unwrap_or_else(|| "flow failed".into());
-            return Err(TransportError::OperationFailed { reason });
-        }
-
-        Ok(())
-    }
-
-    async fn run_flow_for_bool(&self, flow_name: &str, yaml: &str) -> Result<bool, TransportError> {
-        match self.run_flow(flow_name, yaml).await {
-            Ok(()) => Ok(true),
-            Err(TransportError::OperationFailed { .. }) => Ok(false),
-            Err(e) => Err(e),
-        }
-    }
-
-    async fn write_temp_yaml(&self, name: &str, yaml: &str) -> Result<String, TransportError> {
-        let path = std::env::temp_dir().join(format!("podium-{name}.yaml"));
-        tokio::fs::write(&path, yaml).await
-            .map_err(|e| TransportError::OperationFailed { reason: format!("write temp yaml: {e}") })?;
-        Ok(path.to_string_lossy().into_owned())
-    }
-
-    async fn pull_failure_reason(&self, flow_name: &str) -> Option<String> {
-        let device_path = format!("{RESULTS_DIR}/{flow_name}.json");
-        let out = self.adb()
-            .args(["shell", "cat", &device_path])
-            .output().await.ok()?;
-        let json: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-        json["steps"].as_array()?.iter().find_map(|s| {
-            if s["status"].as_str() == Some("FAILED") {
-                s["failure_message"].as_str().map(|m| m.to_string())
-            } else {
-                None
+        // 3. Wait for gRPC server to accept TCP connections
+        let deadline =
+            std::time::Instant::now() + std::time::Duration::from_millis(STARTUP_TIMEOUT_MS);
+        loop {
+            if tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
+                .await
+                .is_ok()
+            {
+                break;
             }
+            if std::time::Instant::now() >= deadline {
+                return Err(TransportError::OperationFailed {
+                    reason: format!(
+                        "Maestro gRPC server did not start on port {port} within {STARTUP_TIMEOUT_MS}ms"
+                    ),
+                });
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(STARTUP_POLL_MS)).await;
+        }
+
+        // 4. Open tonic channel
+        let endpoint = format!("http://127.0.0.1:{port}");
+        let channel = Channel::from_shared(endpoint)
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("channel: {e}"),
+            })?
+            .connect()
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("connect: {e}"),
+            })?;
+
+        Ok(Self {
+            serial,
+            port,
+            client: MaestroDriverClient::new(channel),
         })
     }
 
-    fn selector_yaml(s: &Selector) -> String {
-        if let Some(text) = &s.text {
-            if s.index > 0 {
-                format!("    text: {text:?}\n    index: {}", s.index)
-            } else {
-                format!("    text: {text:?}")
-            }
-        } else if let Some(id) = &s.id {
-            if s.index > 0 {
-                format!("    id: {id:?}\n    index: {}", s.index)
-            } else {
-                format!("    id: {id:?}")
-            }
-        } else {
-            format!("    index: {}", s.index)
-        }
+    fn adb_shell(&self, args: &[&str]) -> Command {
+        let mut cmd = adb_cmd(&self.serial, &["shell"]);
+        cmd.args(args);
+        cmd
     }
 
-    fn flow_header(&self) -> String {
-        format!("appId: {}\n---\n", self.app_id)
+    async fn view_hierarchy(&self) -> Result<String, TransportError> {
+        let mut client = self.client.clone();
+        let resp = client
+            .view_hierarchy(ViewHierarchyRequest {})
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("viewHierarchy: {e}"),
+            })?;
+        Ok(resp.into_inner().hierarchy)
     }
+}
+
+fn adb_cmd(serial: &Option<String>, args: &[&str]) -> Command {
+    let mut cmd = Command::new("adb");
+    if let Some(s) = serial {
+        cmd.args(["-s", s.as_str()]);
+    }
+    cmd.args(args);
+    cmd
 }
 
 #[async_trait]
 impl Transport for AdbTransport {
     async fn launch_app(&self, app_id: &str, clear_state: bool) -> Result<(), TransportError> {
-        let yaml = format!(
-            "{}- launchApp:\n    appId: {app_id:?}\n    clearState: {clear_state}\n",
-            self.flow_header()
-        );
-        self.run_flow("launch_app", &yaml).await
+        if clear_state {
+            self.adb_shell(&["pm", "clear", app_id])
+                .status()
+                .await
+                .map_err(|e| TransportError::OperationFailed {
+                    reason: format!("pm clear: {e}"),
+                })?;
+        }
+        let mut client = self.client.clone();
+        client
+            .launch_app(LaunchAppRequest {
+                package_name: app_id.to_string(),
+                arguments: vec![],
+            })
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("launchApp: {e}"),
+            })?;
+        Ok(())
     }
 
     async fn is_visible(&self, selector: &Selector) -> Result<bool, TransportError> {
-        let sel = Self::selector_yaml(selector);
-        let yaml = format!(
-            "{}- assertVisible:\n{sel}\n    timeout: 0\n",
-            self.flow_header()
-        );
-        self.run_flow_for_bool("is_visible", &yaml).await
+        let xml = self.view_hierarchy().await?;
+        Ok(find_element(&xml, selector).is_some())
     }
 
     async fn tap(&self, selector: &Selector) -> Result<(), TransportError> {
-        let sel = Self::selector_yaml(selector);
-        let yaml = format!("{}- tapOn:\n{sel}\n", self.flow_header());
-        self.run_flow("tap", &yaml).await
+        let xml = self.view_hierarchy().await?;
+        let bounds =
+            find_element(&xml, selector).ok_or_else(|| TransportError::ElementNotFound {
+                reason: format!("tap: element not found: {selector:?}"),
+            })?;
+        let (cx, cy) = bounds.center();
+        let mut client = self.client.clone();
+        client
+            .tap(TapRequest { x: cx, y: cy })
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("tap: {e}"),
+            })?;
+        Ok(())
     }
 
     async fn input_text(&self, text: &str) -> Result<(), TransportError> {
-        let yaml = format!("{}- inputText: {text:?}\n", self.flow_header());
-        self.run_flow("input_text", &yaml).await
+        let mut client = self.client.clone();
+        client
+            .input_text(InputTextRequest {
+                text: text.to_string(),
+            })
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("inputText: {e}"),
+            })?;
+        Ok(())
     }
 
     async fn hide_keyboard(&self) -> Result<(), TransportError> {
-        let yaml = format!("{}- hideKeyboard\n", self.flow_header());
-        self.run_flow("hide_keyboard", &yaml).await
+        self.adb_shell(&["input", "keyevent", "KEYCODE_BACK"])
+            .status()
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("hide_keyboard: {e}"),
+            })?;
+        Ok(())
     }
 
     async fn swipe(&self, direction: &Direction) -> Result<(), TransportError> {
-        let dir = match direction {
-            Direction::Up => "up",
-            Direction::Down => "down",
-            Direction::Left => "left",
-            Direction::Right => "right",
+        let args: &[&str] = match direction {
+            Direction::Up => &["input", "swipe", "540", "1400", "540", "400", "300"],
+            Direction::Down => &["input", "swipe", "540", "400", "540", "1400", "300"],
+            Direction::Left => &["input", "swipe", "900", "800", "180", "800", "300"],
+            Direction::Right => &["input", "swipe", "180", "800", "900", "800", "300"],
         };
-        let yaml = format!("{}- swipe: {dir:?}\n", self.flow_header());
-        self.run_flow("swipe", &yaml).await
+        self.adb_shell(args)
+            .status()
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("swipe: {e}"),
+            })?;
+        Ok(())
     }
 
     async fn back(&self) -> Result<(), TransportError> {
-        let yaml = format!("{}- back\n", self.flow_header());
-        self.run_flow("back", &yaml).await
+        self.adb_shell(&["input", "keyevent", "KEYCODE_BACK"])
+            .status()
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("back: {e}"),
+            })?;
+        Ok(())
     }
 
     async fn wait_for_idle(&self, timeout_ms: u64) -> Result<(), TransportError> {
-        let yaml = format!(
-            "{}- waitForAnimationToEnd:\n    timeout: {timeout_ms}\n",
-            self.flow_header()
-        );
-        self.run_flow("wait_for_idle", &yaml).await
+        let deadline =
+            tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+        loop {
+            let mut client = self.client.clone();
+            let updating = client
+                .is_window_updating(CheckWindowUpdatingRequest {
+                    app_id: String::new(),
+                })
+                .await
+                .map(|r| r.into_inner().is_window_updating)
+                .unwrap_or(false);
+            if !updating {
+                return Ok(());
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Ok(()); // best-effort
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
     }
 
     async fn take_screenshot(&self, name: &str) -> Result<(), TransportError> {
-        let yaml = format!("{}- takeScreenshot: {name:?}\n", self.flow_header());
-        self.run_flow("take_screenshot", &yaml).await
+        let mut client = self.client.clone();
+        let resp = client
+            .screenshot(ScreenshotRequest {})
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("screenshot: {e}"),
+            })?;
+        let bytes = resp.into_inner().bytes;
+        let path = format!("{name}.png");
+        tokio::fs::write(&path, &bytes)
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("write screenshot: {e}"),
+            })?;
+        Ok(())
     }
 }

@@ -28,9 +28,13 @@ impl DeviceBuilder {
     }
 
     pub async fn build(self) -> Result<PodiumDevice, PodiumError> {
-        let app_id = self.app_id.unwrap_or_default();
         let transport: Arc<dyn Transport> = match self.platform {
-            Some(Platform::Android { serial }) => Arc::new(AdbTransport { serial, app_id }),
+            Some(Platform::Android { serial }) => {
+                let t = AdbTransport::connect(serial, 7001)
+                    .await
+                    .map_err(|e| PodiumError::Transport { reason: e.to_string() })?;
+                Arc::new(t)
+            }
             Some(Platform::Ios { .. }) => Arc::new(IosTransport),
             None => return Err(PodiumError::Transport { reason: "platform not set".into() }),
         };

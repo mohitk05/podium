@@ -1,5 +1,5 @@
-//! Integration tests for AdbTransport — require a connected Android device.
-//! Run with: cargo test -p podium-device --features integration -- --ignored
+//! Integration tests — require Maestro driver APK installed and a connected device.
+//! Run: PODIUM_SERIAL=<serial> PODIUM_APP_ID=<pkg> cargo test -p podium-device --features integration -- --ignored
 
 #[cfg(feature = "integration")]
 mod adb {
@@ -14,7 +14,7 @@ mod adb {
     }
 
     #[tokio::test]
-    #[ignore = "requires connected Android device"]
+    #[ignore = "requires connected device with Maestro driver APK"]
     async fn launch_app_smoke() {
         let device = DeviceBuilder::default()
             .platform(Platform::Android { serial: serial() })
@@ -26,7 +26,7 @@ mod adb {
     }
 
     #[tokio::test]
-    #[ignore = "requires connected Android device"]
+    #[ignore = "requires connected device with Maestro driver APK"]
     async fn tap_and_assert_visible() {
         let device = DeviceBuilder::default()
             .platform(Platform::Android { serial: serial() })
