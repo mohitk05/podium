@@ -43,7 +43,7 @@ pub enum Platform {
 All methods are `async` and return `Result<_, PodiumError>`. The caller (Bombadil) receives an `Err` on failure and decides how to handle it (fail the property, shrink, retry).
 
 ```rust
-device.launch_app("com.example.app", ClearState::Yes).await?;
+device.launch_app("com.example.app", true).await?;  // second arg: clear_state
 device.tap(Selector::text("Login")).await?;
 device.input_text("hunter2").await?;
 device.assert_visible(Selector::id("home_screen")).await?;
@@ -91,7 +91,7 @@ trait Transport: Send + Sync {
 
 `DeviceBuilder::build()` matches on `Platform` and constructs the concrete transport:
 
-- `Platform::Android` → `AdbTransport` — drives the device via `tokio::process::Command` wrapping `adb shell` UIAutomator calls
+- `Platform::Android` → `AdbTransport` — drives the device via `tokio::process::Command`, using `adb push` + `am instrument` to invoke the Espresso runner APK (same mechanism as the CLI), not raw `adb shell` UIAutomator commands
 - `Platform::Ios` → `IosTransport` — stub; every method returns `Err(PodiumError::NotSupported { ... })`
 
 The poll/retry logic (wait-until-visible loop, scroll-until-visible loop) lives in `PodiumDevice` methods, mirroring the engine/driver separation in `podium-core`. The transport is a thin async I/O layer only.
@@ -126,7 +126,7 @@ pub enum PodiumError {
 
 ## Testing
 
-**Unit tests** — `MockTransport` implements the private `Transport` trait, records calls, and returns configurable responses. Covers poll/retry logic in `PodiumDevice` without a real device. `MockTransport` is also exposed publicly (behind a `mock` feature flag) so Bombadil can use it to test its PBT harness offline.
+**Unit tests** — `MockTransport` implements the private `Transport` trait, records calls, and returns configurable responses. Covers poll/retry logic in `PodiumDevice` without a real device. `MockTransport` is also re-exported publicly under `podium_device::mock` (behind a `mock` Cargo feature flag) so Bombadil can use it to test its PBT harness offline without a real device attached.
 
 **Integration tests** — gated behind a `integration` feature flag. Require a connected device. Thin smoke tests only: launch, tap, assert. Run manually or in CI with a real device attached.
 
