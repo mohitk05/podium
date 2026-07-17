@@ -36,8 +36,4 @@ impl Transport for AdbTransport {
     async fn take_screenshot(&self, _name: &str) -> Result<(), TransportError> {
         Err(TransportError::OperationFailed { reason: "not yet implemented".into() })
     }
-    async fn now_ms(&self) -> u64 {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
-    }
 }

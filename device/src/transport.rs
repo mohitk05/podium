@@ -13,5 +13,4 @@ pub(crate) trait Transport: Send + Sync {
     async fn back(&self) -> Result<(), TransportError>;
     async fn wait_for_idle(&self, timeout_ms: u64) -> Result<(), TransportError>;
     async fn take_screenshot(&self, name: &str) -> Result<(), TransportError>;
-    async fn now_ms(&self) -> u64;
 }

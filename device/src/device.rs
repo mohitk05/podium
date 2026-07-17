@@ -90,40 +90,40 @@ impl PodiumDevice {
     }
 
     async fn wait_until_visible(&self, selector: &Selector, timeout_ms: u64) -> Result<(), PodiumError> {
-        let start = self.transport.now_ms().await;
-        let deadline = start + timeout_ms;
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
         loop {
             if self.transport.is_visible(selector).await.map_err(PodiumError::from)? {
                 return Ok(());
             }
-            let now = self.transport.now_ms().await;
+            let now = tokio::time::Instant::now();
             if now >= deadline {
                 return Err(PodiumError::Timeout {
                     timeout_ms,
                     reason: format!("element not visible: {:?}", selector),
                 });
             }
-            let sleep_ms = 200u64.min(deadline - now);
-            tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
+            let remaining = deadline - now;
+            let sleep = remaining.min(std::time::Duration::from_millis(200));
+            tokio::time::sleep(sleep).await;
         }
     }
 
     async fn wait_until_not_visible(&self, selector: &Selector, timeout_ms: u64) -> Result<(), PodiumError> {
-        let start = self.transport.now_ms().await;
-        let deadline = start + timeout_ms;
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
         loop {
             if !self.transport.is_visible(selector).await.map_err(PodiumError::from)? {
                 return Ok(());
             }
-            let now = self.transport.now_ms().await;
+            let now = tokio::time::Instant::now();
             if now >= deadline {
                 return Err(PodiumError::Timeout {
                     timeout_ms,
                     reason: format!("element still visible: {:?}", selector),
                 });
             }
-            let sleep_ms = 200u64.min(deadline - now);
-            tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
+            let remaining = deadline - now;
+            let sleep = remaining.min(std::time::Duration::from_millis(200));
+            tokio::time::sleep(sleep).await;
         }
     }
 
@@ -140,5 +140,137 @@ impl PodiumDevice {
         Err(PodiumError::ElementNotFound {
             reason: format!("element not found after {} swipes: {:?}", max_swipes, selector),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::TransportError;
+    use async_trait::async_trait;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    struct MockTransport {
+        visibility: Mutex<HashMap<String, bool>>,
+        calls: Mutex<Vec<String>>,
+    }
+
+    impl MockTransport {
+        fn new() -> Self {
+            Self {
+                visibility: Mutex::new(HashMap::new()),
+                calls: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn set_visible(&self, key: &str, visible: bool) {
+            self.visibility.lock().unwrap().insert(key.into(), visible);
+        }
+
+        fn calls(&self) -> Vec<String> {
+            self.calls.lock().unwrap().clone()
+        }
+
+        fn selector_key(s: &Selector) -> String {
+            if let Some(t) = &s.text { format!("text:{t}") }
+            else if let Some(id) = &s.id { format!("id:{id}") }
+            else { "unknown".into() }
+        }
+    }
+
+    #[async_trait]
+    impl Transport for MockTransport {
+        async fn launch_app(&self, app_id: &str, clear_state: bool) -> Result<(), TransportError> {
+            self.calls.lock().unwrap().push(format!("launch_app({app_id},{clear_state})"));
+            Ok(())
+        }
+        async fn is_visible(&self, selector: &Selector) -> Result<bool, TransportError> {
+            let key = Self::selector_key(selector);
+            let visible = self.visibility.lock().unwrap().get(&key).copied().unwrap_or(false);
+            Ok(visible)
+        }
+        async fn tap(&self, selector: &Selector) -> Result<(), TransportError> {
+            self.calls.lock().unwrap().push(format!("tap({})", Self::selector_key(selector)));
+            Ok(())
+        }
+        async fn input_text(&self, text: &str) -> Result<(), TransportError> {
+            self.calls.lock().unwrap().push(format!("input_text({text})"));
+            Ok(())
+        }
+        async fn hide_keyboard(&self) -> Result<(), TransportError> {
+            self.calls.lock().unwrap().push("hide_keyboard".into());
+            Ok(())
+        }
+        async fn swipe(&self, direction: &Direction) -> Result<(), TransportError> {
+            self.calls.lock().unwrap().push(format!("swipe({direction:?})"));
+            Ok(())
+        }
+        async fn back(&self) -> Result<(), TransportError> {
+            self.calls.lock().unwrap().push("back".into());
+            Ok(())
+        }
+        async fn wait_for_idle(&self, timeout_ms: u64) -> Result<(), TransportError> {
+            self.calls.lock().unwrap().push(format!("wait_for_idle({timeout_ms})"));
+            Ok(())
+        }
+        async fn take_screenshot(&self, name: &str) -> Result<(), TransportError> {
+            self.calls.lock().unwrap().push(format!("take_screenshot({name})"));
+            Ok(())
+        }
+    }
+
+    fn make_device(mock: Arc<MockTransport>) -> PodiumDevice {
+        PodiumDevice { transport: mock as Arc<dyn Transport> }
+    }
+
+    #[tokio::test]
+    async fn assert_visible_succeeds_immediately() {
+        let mock = Arc::new(MockTransport::new());
+        mock.set_visible("text:Login", true);
+        let device = make_device(mock.clone());
+        device.assert_visible(Selector::text("Login")).await.unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn assert_visible_times_out() {
+        let mock = Arc::new(MockTransport::new());
+        let device = make_device(mock.clone());
+        let result = device.assert_visible(Selector::text("Never")).await;
+        assert!(matches!(result, Err(PodiumError::Timeout { .. })));
+    }
+
+    #[tokio::test]
+    async fn assert_not_visible_succeeds_immediately() {
+        let mock = Arc::new(MockTransport::new());
+        let device = make_device(mock.clone());
+        device.assert_not_visible(Selector::text("Error")).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn scroll_until_visible_finds_immediately() {
+        let mock = Arc::new(MockTransport::new());
+        mock.set_visible("text:Item", true);
+        let device = make_device(mock.clone());
+        device.scroll_until_visible(Selector::text("Item")).await.unwrap();
+        assert!(!mock.calls().iter().any(|c| c.starts_with("swipe")));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn scroll_until_visible_exceeds_max_swipes() {
+        let mock = Arc::new(MockTransport::new());
+        let device = make_device(mock.clone());
+        let result = device.scroll_until_visible(Selector::text("Deep")).await;
+        assert!(matches!(result, Err(PodiumError::ElementNotFound { .. })));
+    }
+
+    #[tokio::test]
+    async fn ios_transport_returns_not_supported() {
+        use crate::ios::IosTransport;
+        let device = PodiumDevice {
+            transport: Arc::new(IosTransport) as Arc<dyn Transport>,
+        };
+        let err = device.tap(Selector::text("Anything")).await.unwrap_err();
+        assert!(matches!(err, PodiumError::NotSupported { .. }));
     }
 }
