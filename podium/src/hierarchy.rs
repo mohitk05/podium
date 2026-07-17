@@ -25,10 +25,10 @@ pub(crate) fn find_element(xml: &str, selector: &Selector) -> Option<Bounds> {
                 let attrs: HashMap<String, String> = e
                     .attributes()
                     .filter_map(|a| a.ok())
-                    .map(|a| {
+                    .filter_map(|a| {
                         let key = String::from_utf8_lossy(a.key.as_ref()).to_string();
-                        let val = String::from_utf8_lossy(a.value.as_ref()).to_string();
-                        (key, val)
+                        let val = a.unescape_value().ok()?.into_owned();
+                        Some((key, val))
                     })
                     .collect();
                 if matches_selector(&attrs, selector) {
@@ -137,5 +137,16 @@ mod tests {
     fn parse_bounds_basic() {
         let b = parse_bounds("[100,200][300,260]").unwrap();
         assert_eq!((b.x, b.y, b.width, b.height), (100, 200, 200, 60));
+    }
+
+    #[test]
+    fn find_by_text_with_html_entity() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node index="0" text="Network &amp; internet" resource-id="com.example:id/net"
+        bounds="[0,0][100,50]" class="android.widget.TextView" />
+</hierarchy>"#;
+        let b = find_element(xml, &Selector::text("Network & internet"));
+        assert!(b.is_some(), "&amp; in XML must match & in selector");
     }
 }
