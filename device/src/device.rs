@@ -12,6 +12,7 @@ pub enum Platform {
 
 pub struct DeviceBuilder {
     platform: Option<Platform>,
+    app_id: Option<String>,
 }
 
 impl DeviceBuilder {
@@ -20,9 +21,15 @@ impl DeviceBuilder {
         self
     }
 
+    pub fn app_id(mut self, id: impl Into<String>) -> Self {
+        self.app_id = Some(id.into());
+        self
+    }
+
     pub async fn build(self) -> Result<PodiumDevice, PodiumError> {
+        let app_id = self.app_id.unwrap_or_default();
         let transport: Arc<dyn Transport> = match self.platform {
-            Some(Platform::Android { serial }) => Arc::new(AdbTransport { serial }),
+            Some(Platform::Android { serial }) => Arc::new(AdbTransport { serial, app_id }),
             Some(Platform::Ios { .. }) => Arc::new(IosTransport),
             None => return Err(PodiumError::Transport { reason: "platform not set".into() }),
         };
@@ -32,7 +39,7 @@ impl DeviceBuilder {
 
 impl Default for DeviceBuilder {
     fn default() -> Self {
-        Self { platform: None }
+        Self { platform: None, app_id: None }
     }
 }
 
@@ -42,7 +49,7 @@ pub struct PodiumDevice {
 
 impl PodiumDevice {
     pub fn builder() -> DeviceBuilder {
-        DeviceBuilder { platform: None }
+        DeviceBuilder { platform: None, app_id: None }
     }
 
     #[cfg(feature = "mock")]

@@ -1,0 +1,40 @@
+//! Integration tests for AdbTransport — require a connected Android device.
+//! Run with: cargo test -p podium-device --features integration -- --ignored
+
+#[cfg(feature = "integration")]
+mod adb {
+    use podium_device::{DeviceBuilder, Platform, Selector};
+
+    fn serial() -> Option<String> {
+        std::env::var("PODIUM_SERIAL").ok()
+    }
+
+    fn app_id() -> String {
+        std::env::var("PODIUM_APP_ID").unwrap_or_else(|_| "dev.podium.sample".into())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires connected Android device"]
+    async fn launch_app_smoke() {
+        let device = DeviceBuilder::default()
+            .platform(Platform::Android { serial: serial() })
+            .app_id(app_id())
+            .build()
+            .await
+            .expect("build device");
+        device.launch_app(&app_id(), false).await.expect("launch_app");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires connected Android device"]
+    async fn tap_and_assert_visible() {
+        let device = DeviceBuilder::default()
+            .platform(Platform::Android { serial: serial() })
+            .app_id(app_id())
+            .build()
+            .await
+            .expect("build device");
+        device.launch_app(&app_id(), true).await.expect("launch_app");
+        device.assert_visible(Selector::text("Welcome")).await.expect("welcome visible");
+    }
+}

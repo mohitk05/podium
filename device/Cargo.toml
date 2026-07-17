@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 podium-core = { path = "../core" }
-tokio = { version = "1", features = ["process", "time", "rt"] }
+tokio = { version = "1", features = ["process", "time", "rt", "fs"] }
 async-trait = "0.1"
 thiserror = "2"
 serde_json = "1"
