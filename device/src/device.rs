@@ -10,6 +10,7 @@ pub enum Platform {
     Ios { udid: Option<String> },
 }
 
+#[derive(Default)]
 pub struct DeviceBuilder {
     platform: Option<Platform>,
     app_id: Option<String>,
@@ -37,11 +38,6 @@ impl DeviceBuilder {
     }
 }
 
-impl Default for DeviceBuilder {
-    fn default() -> Self {
-        Self { platform: None, app_id: None }
-    }
-}
 
 pub struct PodiumDevice {
     pub(crate) transport: Arc<dyn Transport>,

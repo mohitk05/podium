@@ -17,6 +17,7 @@ pub enum PodiumError {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)]
 pub(crate) enum TransportError {
     #[error("Element not found: {reason}")]
     ElementNotFound { reason: String },
