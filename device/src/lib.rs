@@ -26,6 +26,7 @@ mod transport;
 mod device;
 mod adb;
 mod ios;
+mod hierarchy;
 
 #[cfg(feature = "mock")]
 pub mod mock;
