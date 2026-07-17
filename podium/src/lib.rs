@@ -1,12 +1,12 @@
-//! `podium-device` — async Rust API for driving a mobile device via Podium's test runner.
+//! `podium` — async Rust API for driving a mobile device via Podium's test runner.
 //!
 //! # Quick start
 //!
 //! ```rust,no_run
-//! use podium_device::{DeviceBuilder, Platform, Selector};
+//! use podium::{DeviceBuilder, Platform, Selector};
 //!
 //! # #[tokio::main]
-//! # async fn main() -> Result<(), podium_device::PodiumError> {
+//! # async fn main() -> Result<(), podium::PodiumError> {
 //! let device = DeviceBuilder::default()
 //!     .platform(Platform::Android { serial: None })
 //!     .app_id("com.example.myapp")

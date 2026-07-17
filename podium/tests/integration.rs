@@ -1,9 +1,9 @@
 //! Integration tests — require Maestro driver APK installed and a connected device.
-//! Run: PODIUM_SERIAL=<serial> PODIUM_APP_ID=<pkg> cargo test -p podium-device --features integration -- --ignored
+//! Run: PODIUM_SERIAL=<serial> PODIUM_APP_ID=<pkg> cargo test -p podium --features integration -- --ignored
 
 #[cfg(feature = "integration")]
 mod adb {
-    use podium_device::{DeviceBuilder, Platform, Selector};
+    use podium::{DeviceBuilder, Platform, Selector};
 
     fn serial() -> Option<String> {
         std::env::var("PODIUM_SERIAL").ok()
