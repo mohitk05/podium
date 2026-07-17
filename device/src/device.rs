@@ -285,4 +285,10 @@ mod tests {
         let err = device.tap(Selector::text("Anything")).await.unwrap_err();
         assert!(matches!(err, PodiumError::NotSupported { .. }));
     }
+
+    #[tokio::test]
+    async fn builder_requires_platform() {
+        let result = DeviceBuilder::default().build().await;
+        assert!(matches!(result, Err(PodiumError::Transport { .. })));
+    }
 }
