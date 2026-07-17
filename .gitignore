@@ -17,6 +17,9 @@ podium-*/
 # Staged APKs for embedding (populated by release workflow or manually)
 cli/apks/*.apk
 
+# Vendored APKs bundled into the crate via include_bytes!
+!podium/src/*.apk
+
 # macOS
 .DS_Store
 
