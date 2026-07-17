@@ -1,3 +1,6 @@
+// Vendored from https://github.com/mobile-dev-inc/maestro (Apache-2.0)
+// Source: maestro-proto/src/main/proto/maestro_android.proto
+
 syntax = "proto3";
 
 package maestro_android;
