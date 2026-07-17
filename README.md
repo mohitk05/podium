@@ -1,313 +1,132 @@
 # Podium
 
-On-device Maestro-flow interpreter embedded inside an Android instrumentation APK.
+Async Rust library for driving Android (and eventually iOS) devices in tests. Wraps Maestro's on-device gRPC server behind a clean `async/await` API — no YAML, no separate CLI process.
 
-## Problem
+## How it works
 
-Appium-based cloud testing is slow because the test interpreter runs on the client machine and every command — find element, tap, assert — is a separate HTTP round-trip over the WAN to the device farm. Maestro is fast because its decision loop runs adjacent to the device, but Maestro can't run natively on most cloud farms.
+`DeviceBuilder::build()` connects to a running Android emulator or device via ADB:
 
-**Thesis:** If the flow interpreter is embedded *inside* an Android instrumentation APK (the artifact type every cloud farm — BrowserStack, Sauce Labs, Firebase Test Lab, AWS Device Farm — accepts via their native Espresso endpoints), then execution is Maestro-speed or faster, because element matching and action dispatch happen in-process on the device with zero network hops, and the same artifact runs locally and on any cloud farm.
+1. Installs the Maestro driver APKs (`maestro-app.apk` + `maestro-server.apk`) if not already present.
+2. Forwards the gRPC port over ADB (`tcp:7001`).
+3. Starts the on-device gRPC server via `am instrument` (skipped if already running).
+4. Opens a `tonic` channel to `127.0.0.1:7001`.
 
-## Architecture
+All subsequent calls (`tap`, `assert_visible`, `scroll_until_visible`, …) go through that channel.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  flows/*.yaml  ──parse──►  podium validate (Rust, host)             │
-│                                                                     │
-│  podium test ──────────────────────────────────────────────────────►│
-│       │  adb install + push flows                                   │
-│       │  adb shell am instrument                                    │
-│       │  stream PODIUM| lines from logcat                           │
-│       ▼                                                             │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  Instrumentation APK (on-device)                            │   │
-│  │                                                             │   │
-│  │  FlowRunner.kt ──► parse_flow() ──► run_flow()              │   │
-│  │                           ▲               │                 │   │
-│  │                           │         ┌─────┴──────────────┐  │   │
-│  │                    podium-core.so    │  engine.rs (Rust)  │  │   │
-│  │                    (UniFFI)          │  wait / retry loop │  │   │
-│  │                                     │  scroll / timeout  │  │   │
-│  │                                     └────────┬───────────┘  │   │
-│  │                                              │ Driver trait  │   │
-│  │                                     ┌────────▼───────────┐  │   │
-│  │                                     │ UiAutomatorDriver  │  │   │
-│  │                                     │   (Kotlin)         │  │   │
-│  │                                     │   UIAutomator2     │  │   │
-│  │                                     └────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
+## Quick start
+
+Add to `Cargo.toml`:
+
+```toml
+[dependencies]
+podium = { git = "https://github.com/mohitk05/podium" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
-**Key design invariant:** All timing/retry semantics live in Rust (`engine.rs`). The Kotlin driver is a thin adapter — no polling, no sleeps, no retry logic. This makes the engine unit-testable against a `MockDriver` on the host, and makes a future iOS port a matter of writing a Swift `Driver` over XCUITest.
+```rust
+use podium::{DeviceBuilder, Platform, Selector};
 
-## Quick start (pre-built binary)
+#[tokio::main]
+async fn main() -> Result<(), podium::PodiumError> {
+    let device = DeviceBuilder::default()
+        .platform(Platform::Android { serial: None })
+        .app_id("com.example.myapp")
+        .build()
+        .await?;
 
-The release binary embeds the runner and sample APKs — the only prerequisite is `adb`.
-
-### 1. Install `adb`
-
-**macOS:**
-```bash
-brew install --cask android-platform-tools
+    device.launch_app("com.example.myapp", true).await?;
+    device.assert_visible(Selector::text("Welcome")).await?;
+    device.tap(Selector::text("Log in")).await?;
+    device.input_text("alice").await?;
+    device.take_screenshot("after-login").await?;
+    Ok(())
+}
 ```
 
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt-get install -y adb
+`serial: None` picks the only connected device/emulator. Pass `serial: Some("emulator-5554".into())` to target a specific one.
+
+## API
+
+### `DeviceBuilder`
+
+```rust
+DeviceBuilder::default()
+    .platform(Platform::Android { serial: Option<String> })
+    .app_id("com.example.app")   // used for pm clear in launch_app
+    .build()
+    .await?
 ```
 
-Verify: `adb version` returns a value.
+### `PodiumDevice` methods
 
-### 2. Download `podium`
+| Method | Description |
+|---|---|
+| `launch_app(app_id, clear_state)` | Launch app. If `clear_state` is true, runs `pm clear` first. |
+| `tap(selector)` | Tap the center of the matching element. |
+| `input_text(text)` | Type text into the focused field. |
+| `assert_visible(selector)` | Poll until element is visible (10 s timeout). |
+| `assert_not_visible(selector)` | Poll until element is gone (10 s timeout). |
+| `scroll_until_visible(selector)` | Swipe down up to 20 times until element appears. |
+| `swipe(direction)` | Single swipe. `Direction`: `Up`, `Down`, `Left`, `Right`. |
+| `back()` | Press the back button (`KEYCODE_BACK`). |
+| `hide_keyboard()` | Dismiss the soft keyboard (`KEYCODE_BACK`). |
+| `wait_for_animation()` | Wait for the window to stop updating (up to 10 s). |
+| `take_screenshot(name)` | Write `<name>.png` to the current directory. |
 
-```bash
-# macOS (Apple Silicon)
-curl -Lo podium https://github.com/mohitk05/podium/releases/latest/download/podium-macos-aarch64
+### `Selector`
 
-# macOS (Intel)
-curl -Lo podium https://github.com/mohitk05/podium/releases/latest/download/podium-macos-x86_64
-
-# Linux (x86-64)
-curl -Lo podium https://github.com/mohitk05/podium/releases/latest/download/podium-linux-x86_64
+```rust
+Selector::text("Network & internet")   // exact text match
+Selector::text("/Item \\d+/")          // regex (wrap in slashes)
+Selector::id("login_btn")              // resource-id suffix match
+Selector::text("Item").index(1)        // second match
 ```
 
-```bash
-chmod +x podium && sudo mv podium /usr/local/bin/
-```
+## Features
 
-### 3. Connect a device or start an emulator
+| Feature | Description |
+|---|---|
+| `mock` | Exports `MockTransport` for unit-testing code that drives a `PodiumDevice`. |
+| `integration` | Enables the integration test suite in `tests/integration.rs`. |
 
-Plug in an Android device with USB debugging enabled, or start an emulator:
+## Running integration tests
 
-```bash
-emulator -avd <avd-name> -no-window -no-audio &
-adb wait-for-device
-```
-
-### 4. Run the flows
-
-```bash
-podium test flows/login.yaml
-podium test flows/smoke.yaml
-```
-
-`podium test` installs the runner and sample APKs automatically from the embedded copies on first run. No APK files to download or manage.
-
----
-
-## Building from source
-
-Required: Rust, JDK 17, Android SDK (platform-tools + NDK 27), `cargo-ndk`.
-
-### 1. Rust + Android targets
+Requires a running Android emulator:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-rustup target add aarch64-linux-android x86_64-linux-android
-cargo install cargo-ndk --locked
-```
-
-### 2. Java (JDK 17+)
-
-**macOS:** `brew install --cask temurin@17`
-
-**Linux:** `sudo apt-get install -y openjdk-17-jdk`
-
-### 3. Android SDK + NDK
-
-Install [Android Studio](https://developer.android.com/studio) or the command-line tools, then:
-
-```bash
-sdkmanager "platform-tools" "platforms;android-35" "ndk;27.2.12479018"
-```
-
-Set `ANDROID_HOME` (add to `~/.zshrc` or `~/.bashrc`):
-
-```bash
-export ANDROID_HOME="$HOME/Library/Android/sdk"   # macOS default
-export PATH="$ANDROID_HOME/platform-tools:$PATH"
-```
-
-### 4. Clone, build, run
-
-```bash
-git clone https://github.com/mohitk05/podium.git
-cd podium
-
-# Build Rust core → Kotlin bindings → Android APKs
-bash scripts/build-runner.sh
-
-# Install the CLI
-cargo install --path cli
-
-# Start an emulator (or plug in a device)
-emulator -avd podium -no-window -no-audio &
+emulator -avd <avd-name> &
 adb wait-for-device
 
-# Run the flows
-podium test flows/login.yaml
-podium test flows/smoke.yaml
-
-# Or run everything at once
-bash scripts/run-local.sh
+cargo test -p podium --features integration -- --ignored --nocapture --test-threads=1
 ```
 
-## Running on cloud device farms
+`PODIUM_SERIAL=emulator-5554` targets a specific device.
 
-Podium's runner APK is a standard Espresso instrumentation APK. Every cloud farm that accepts Espresso APKs via their native endpoint works without any Podium-specific plugin.
-
-### BrowserStack App Automate
-
-Requires: `BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY` (find them under [Account → Settings](https://www.browserstack.com/accounts/settings)).
-
-```bash
-export BROWSERSTACK_USERNAME=your_username
-export BROWSERSTACK_ACCESS_KEY=your_access_key
-
-podium upload browserstack
-```
-
-Credentials are read from env vars automatically; no flags needed for the common case. The command uploads the embedded APKs, triggers a build, and prints a direct App Automate dashboard link.
-
-To target a different device or override which APKs are used:
-
-```bash
-podium upload browserstack \
-  --devices "Samsung Galaxy S23-13.0,Google Pixel 7-13.0" \
-  --app path/to/sampleapp.apk \
-  --runner path/to/runner.apk
-```
-
-### Sauce Labs
-
-Requires: `SAUCE_USERNAME` and `SAUCE_ACCESS_KEY` (find them under User Settings → Access Key).
-
-```bash
-export SAUCE_USERNAME=your_username
-export SAUCE_ACCESS_KEY=your_access_key
-
-podium upload saucelabs
-```
-
-To target a specific device or region:
-
-```bash
-podium upload saucelabs \
-  --region eu-central-1 \
-  --device "Samsung Galaxy S23" \
-  --platform-version 13
-```
-
-Replace the default device with any entry from the [Sauce Labs device catalog](https://app.saucelabs.com/live/web-testing/virtual).
-
-### How it works on cloud farms
-
-The runner APK IS the Espresso test suite — there is no separate test framework. When the farm invokes `am instrument`, the runner:
-1. Reads the flow YAML files pushed to the device (or uses flows baked in at build time).
-2. Executes each step via UIAutomator2 entirely on-device with zero network round-trips.
-3. Reports results through the standard instrumentation output that every Espresso-compatible farm already understands.
-
-The only constraint is **ABI coverage**: real devices require the `arm64-v8a` native library in the runner APK. The release build includes both `arm64-v8a` and `x86_64` ABIs, so it runs on both real devices and x86 cloud emulators.
-
-## Command Reference
-
-### `podium validate <flows>`
-
-Parse flows locally without a device. Catches YAML errors instantly.
-
-```bash
-podium validate flows/
-podium validate flows/login.yaml
-podium validate flows/smoke.yaml --env BASE_URL=https://example.com
-```
-
-### `podium test <flows>`
-
-Run flows on a connected device.
-
-```bash
-podium test flows/ --runner <path/to/runner.apk>
-podium test flows/login.yaml --app sampleapp.apk --runner runner.apk
-podium test flows/ --serial emulator-5554 --out ./results
-podium test flows/ --env USERNAME=alice --env PASSWORD=secret
-```
-
-Options: `--app`, `--runner`, `--serial`, `--env KEY=VALUE` (repeatable), `--out` (default `./podium-out`).
-
-### `podium report <dir>`
-
-Pretty-print results from a previous run.
-
-```bash
-podium report podium-out/results/
-```
-
-## Flow YAML Reference
-
-Flows use a Maestro-compatible two-document format:
-
-```yaml
-appId: com.example.myapp
----
-- launchApp:
-    clearState: true          # pm clear + relaunch
-- tapOn:
-    id: "username"            # resource-id suffix match
-- inputText: "alice"
-- tapOn: "Log in"             # shorthand: string → text selector
-- assertVisible: "Welcome"
-- assertVisible:
-    text: "Welcome"
-    timeout: 5000             # ms, default 10000
-- assertNotVisible: "Loading"
-- scrollUntilVisible: "Item 50"
-- scrollUntilVisible:
-    element: "Item 50"
-    maxSwipes: 30
-- swipe:
-    direction: UP             # UP | DOWN | LEFT | RIGHT
-- back                        # press back button
-- waitForAnimationToEnd:
-    timeout: 3000
-- takeScreenshot: "after-login"
-```
-
-**Selectors:**
-- String shorthand: `"Log in"` → `By.text("Log in")`
-- `id:` → `By.res(Pattern.compile(".*:id/<id>"))` (suffix match)
-- Regex text: `"/Item \\d+/"` → `By.text(Pattern.compile(...))`
-
-**Environment substitution:** `${VAR}` in YAML is replaced from `--env VAR=value` or `-e env.VAR=value`.
-
-## Known Limitations
-
-- Android only. No iOS (the Rust core is portable; a Swift `Driver` over XCUITest would work — see "Porting to iOS" below).
-- 10 commands: `launchApp`, `tapOn`, `inputText`, `assertVisible`, `assertNotVisible`, `scrollUntilVisible`, `swipe`, `back`, `waitForAnimationToEnd`, `takeScreenshot`. No JavaScript, no `runFlow` composition.
-- No parallel flow execution.
-- Cloud upload scripts are documented templates — actual runs require credentials you supply separately (see `scripts/upload-browserstack.sh`).
-- `inputText` types via `UiObject2.text = value` (replaces field content); does not simulate per-keystroke events.
-
-## Porting to iOS
-
-The Rust engine is already isolated from Android APIs. To port:
-1. Compile `podium-core` as a static library for iOS targets (`aarch64-apple-ios`, `x86_64-apple-ios-sim`).
-2. Generate Swift bindings: `cargo run --bin uniffi-bindgen generate --language swift`.
-3. Implement `Driver` in Swift over `XCUITest` — `isVisible` becomes `XCUIElement.exists`, `tap` becomes `element.tap()`, etc.
-4. The engine, retry semantics, and timing capture require zero changes.
-
-## Repository Layout
+## Repository layout
 
 ```
 podium/
-├── core/          Rust crate: parser, engine, Driver trait (pure Rust, zero Android deps)
-├── cli/           Rust binary: podium validate / test / report
-├── android/
-│   ├── runner/    Instrumentation APK: FlowRunner + UiAutomatorDriver
-│   └── sampleapp/ Sample app under test (dev.podium.sample)
-├── flows/         Sample YAML flows
-├── scripts/       build-runner.sh, run-local.sh, bench-local.sh
-├── BENCHMARK.md   Measured timings on local emulator
-└── PLAN.md        Original implementation plan
+├── src/
+│   ├── lib.rs          public API surface
+│   ├── device.rs       PodiumDevice + DeviceBuilder, retry/poll logic
+│   ├── adb.rs          AdbTransport: APK install, port-forward, gRPC calls
+│   ├── hierarchy.rs    XML view-hierarchy parser (quick-xml)
+│   ├── transport.rs    Transport trait
+│   ├── types.rs        Selector, Direction, Bounds
+│   ├── mock.rs         MockTransport (feature = "mock")
+│   ├── ios.rs          IosTransport stub (not yet implemented)
+│   ├── maestro-app.apk    bundled Maestro driver v2.6.1
+│   └── maestro-server.apk bundled Maestro server v2.6.1
+├── proto/
+│   └── maestro_android.proto
+├── tests/
+│   └── integration.rs
+└── Cargo.toml
 ```
+
+## Known limitations
+
+- Android only. `IosTransport` exists as a stub but returns `NotSupported` for all calls.
+- `input_text` replaces the focused field's content via the gRPC `InputText` call; it does not simulate per-keystroke events.
+- `hide_keyboard` sends `KEYCODE_BACK`; it only works while the keyboard is shown.
+- Swipe coordinates are hardcoded for a 1080×2400 screen — correct for most emulators, may need adjustment for small or unusual resolutions.
