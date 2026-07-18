@@ -19,7 +19,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-podium = { git = "https://github.com/mohitk05/podium" }
+podium-driver = "0.2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 

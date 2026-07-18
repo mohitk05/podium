@@ -1,5 +1,5 @@
 [package]
-name = "podium"
+name = "podium-driver"
 version = "0.2.0"
 edition = "2021"
 description = "Async Rust library for driving Android devices in tests via Maestro's gRPC server"
@@ -7,6 +7,9 @@ license = "Apache-2.0"
 repository = "https://github.com/mohitk05/podium"
 readme = "../README.md"
 exclude = ["../vendor/*"]
+
+[lib]
+name = "podium"
 
 [dependencies]
 async-trait = "0.1"
