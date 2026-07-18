@@ -12,18 +12,16 @@ pub(crate) mod proto {
 
 use proto::maestro_driver_client::MaestroDriverClient;
 use proto::{
-    CheckWindowUpdatingRequest, InputTextRequest, LaunchAppRequest, ScreenshotRequest,
-    TapRequest, ViewHierarchyRequest,
+    CheckWindowUpdatingRequest, InputTextRequest, LaunchAppRequest, ScreenshotRequest, TapRequest,
+    ViewHierarchyRequest,
 };
 
-const MAESTRO_RUNNER: &str =
-    "dev.mobile.maestro.test/androidx.test.runner.AndroidJUnitRunner";
+const MAESTRO_RUNNER: &str = "dev.mobile.maestro.test/androidx.test.runner.AndroidJUnitRunner";
 const MAESTRO_APP_PACKAGE: &str = "dev.mobile.maestro";
 const MAESTRO_TEST_PACKAGE: &str = "dev.mobile.maestro.test";
 // Sourced from Maestro cli-2.6.1 (Apache-2.0): maestro-client.jar/{maestro-app,maestro-server}.apk
 const MAESTRO_VERSION: &str = "2.6.1";
-const MAESTRO_APP_APK: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/maestro-app-2.6.1.apk"));
+const MAESTRO_APP_APK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/maestro-app-2.6.1.apk"));
 const MAESTRO_SERVER_APK: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/maestro-server-2.6.1.apk"));
 const STARTUP_TIMEOUT_MS: u64 = 30_000;
@@ -37,20 +35,20 @@ pub(crate) struct AdbTransport {
 }
 
 impl AdbTransport {
-    pub(crate) async fn connect(
-        serial: Option<String>,
-        port: u16,
-    ) -> Result<Self, TransportError> {
+    pub(crate) async fn connect(serial: Option<String>, port: u16) -> Result<Self, TransportError> {
         // 1. Install driver APK if not already present
         ensure_driver_installed(&serial).await?;
 
         // 2. Forward the port
-        adb_cmd(&serial, &["forward", &format!("tcp:{port}"), &format!("tcp:{port}")])
-            .status()
-            .await
-            .map_err(|e| TransportError::OperationFailed {
-                reason: format!("adb forward: {e}"),
-            })?;
+        adb_cmd(
+            &serial,
+            &["forward", &format!("tcp:{port}"), &format!("tcp:{port}")],
+        )
+        .status()
+        .await
+        .map_err(|e| TransportError::OperationFailed {
+            reason: format!("adb forward: {e}"),
+        })?;
 
         // 3. Start on-device gRPC server only if not already accepting connections
         let already_up = tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
@@ -148,8 +146,12 @@ async fn ensure_driver_installed(serial: &Option<String>) -> Result<(), Transpor
 
     // Match whole package names — MAESTRO_APP_PACKAGE is a prefix of MAESTRO_TEST_PACKAGE
     // so a simple contains() check would give a false positive.
-    let app_present = installed.lines().any(|l| l.trim() == format!("package:{MAESTRO_APP_PACKAGE}"));
-    let test_present = installed.lines().any(|l| l.trim() == format!("package:{MAESTRO_TEST_PACKAGE}"));
+    let app_present = installed
+        .lines()
+        .any(|l| l.trim() == format!("package:{MAESTRO_APP_PACKAGE}"));
+    let test_present = installed
+        .lines()
+        .any(|l| l.trim() == format!("package:{MAESTRO_TEST_PACKAGE}"));
 
     if app_present && test_present {
         return Ok(());
@@ -243,12 +245,11 @@ impl Transport for AdbTransport {
             })?;
         let (cx, cy) = bounds.center();
         let mut client = self.client.clone();
-        client
-            .tap(TapRequest { x: cx, y: cy })
-            .await
-            .map_err(|e| TransportError::OperationFailed {
+        client.tap(TapRequest { x: cx, y: cy }).await.map_err(|e| {
+            TransportError::OperationFailed {
                 reason: format!("tap: {e}"),
-            })?;
+            }
+        })?;
         Ok(())
     }
 
@@ -304,8 +305,7 @@ impl Transport for AdbTransport {
     }
 
     async fn wait_for_idle(&self, timeout_ms: u64) -> Result<(), TransportError> {
-        let deadline =
-            tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
         loop {
             let mut client = self.client.clone();
             let updating = client
@@ -327,12 +327,11 @@ impl Transport for AdbTransport {
 
     async fn take_screenshot(&self, name: &str) -> Result<(), TransportError> {
         let mut client = self.client.clone();
-        let resp = client
-            .screenshot(ScreenshotRequest {})
-            .await
-            .map_err(|e| TransportError::OperationFailed {
+        let resp = client.screenshot(ScreenshotRequest {}).await.map_err(|e| {
+            TransportError::OperationFailed {
                 reason: format!("screenshot: {e}"),
-            })?;
+            }
+        })?;
         let bytes = resp.into_inner().bytes;
         let path = format!("{name}.png");
         tokio::fs::write(&path, &bytes)

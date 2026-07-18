@@ -7,11 +7,19 @@ pub struct Selector {
 
 impl Selector {
     pub fn text(t: impl Into<String>) -> Self {
-        Self { text: Some(t.into()), id: None, index: 0 }
+        Self {
+            text: Some(t.into()),
+            id: None,
+            index: 0,
+        }
     }
 
     pub fn id(id: impl Into<String>) -> Self {
-        Self { text: None, id: Some(id.into()), index: 0 }
+        Self {
+            text: None,
+            id: Some(id.into()),
+            index: 0,
+        }
     }
 
     pub fn index(mut self, i: u32) -> Self {

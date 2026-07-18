@@ -30,18 +30,23 @@ impl DeviceBuilder {
     pub async fn build(self) -> Result<PodiumDevice, PodiumError> {
         let transport: Arc<dyn Transport> = match self.platform {
             Some(Platform::Android { serial }) => {
-                let t = AdbTransport::connect(serial, 7001)
-                    .await
-                    .map_err(|e| PodiumError::Transport { reason: e.to_string() })?;
+                let t = AdbTransport::connect(serial, 7001).await.map_err(|e| {
+                    PodiumError::Transport {
+                        reason: e.to_string(),
+                    }
+                })?;
                 Arc::new(t)
             }
             Some(Platform::Ios { .. }) => Arc::new(IosTransport),
-            None => return Err(PodiumError::Transport { reason: "platform not set".into() }),
+            None => {
+                return Err(PodiumError::Transport {
+                    reason: "platform not set".into(),
+                })
+            }
         };
         Ok(PodiumDevice { transport })
     }
 }
-
 
 pub struct PodiumDevice {
     pub(crate) transport: Arc<dyn Transport>,
@@ -49,16 +54,24 @@ pub struct PodiumDevice {
 
 impl PodiumDevice {
     pub fn builder() -> DeviceBuilder {
-        DeviceBuilder { platform: None, app_id: None }
+        DeviceBuilder {
+            platform: None,
+            app_id: None,
+        }
     }
 
     #[cfg(feature = "mock")]
     pub fn from_mock(mock: std::sync::Arc<crate::mock::MockTransport>) -> Self {
-        PodiumDevice { transport: mock as Arc<dyn Transport> }
+        PodiumDevice {
+            transport: mock as Arc<dyn Transport>,
+        }
     }
 
     pub async fn launch_app(&self, app_id: &str, clear_state: bool) -> Result<(), PodiumError> {
-        self.transport.launch_app(app_id, clear_state).await.map_err(Into::into)
+        self.transport
+            .launch_app(app_id, clear_state)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn tap(&self, selector: Selector) -> Result<(), PodiumError> {
@@ -94,17 +107,32 @@ impl PodiumDevice {
     }
 
     pub async fn wait_for_animation(&self) -> Result<(), PodiumError> {
-        self.transport.wait_for_idle(10_000).await.map_err(Into::into)
+        self.transport
+            .wait_for_idle(10_000)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn take_screenshot(&self, name: &str) -> Result<(), PodiumError> {
-        self.transport.take_screenshot(name).await.map_err(Into::into)
+        self.transport
+            .take_screenshot(name)
+            .await
+            .map_err(Into::into)
     }
 
-    async fn wait_until_visible(&self, selector: &Selector, timeout_ms: u64) -> Result<(), PodiumError> {
+    async fn wait_until_visible(
+        &self,
+        selector: &Selector,
+        timeout_ms: u64,
+    ) -> Result<(), PodiumError> {
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
         loop {
-            if self.transport.is_visible(selector).await.map_err(PodiumError::from)? {
+            if self
+                .transport
+                .is_visible(selector)
+                .await
+                .map_err(PodiumError::from)?
+            {
                 return Ok(());
             }
             let now = tokio::time::Instant::now();
@@ -120,10 +148,19 @@ impl PodiumDevice {
         }
     }
 
-    async fn wait_until_not_visible(&self, selector: &Selector, timeout_ms: u64) -> Result<(), PodiumError> {
+    async fn wait_until_not_visible(
+        &self,
+        selector: &Selector,
+        timeout_ms: u64,
+    ) -> Result<(), PodiumError> {
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
         loop {
-            if !self.transport.is_visible(selector).await.map_err(PodiumError::from)? {
+            if !self
+                .transport
+                .is_visible(selector)
+                .await
+                .map_err(PodiumError::from)?
+            {
                 return Ok(());
             }
             let now = tokio::time::Instant::now();
@@ -139,18 +176,33 @@ impl PodiumDevice {
         }
     }
 
-    async fn scroll_until_visible_inner(&self, selector: &Selector, max_swipes: u32) -> Result<(), PodiumError> {
+    async fn scroll_until_visible_inner(
+        &self,
+        selector: &Selector,
+        max_swipes: u32,
+    ) -> Result<(), PodiumError> {
         for i in 0..max_swipes {
-            if self.transport.is_visible(selector).await.map_err(PodiumError::from)? {
+            if self
+                .transport
+                .is_visible(selector)
+                .await
+                .map_err(PodiumError::from)?
+            {
                 return Ok(());
             }
             if i < max_swipes - 1 {
-                self.transport.swipe(&Direction::Down).await.map_err(PodiumError::from)?;
+                self.transport
+                    .swipe(&Direction::Down)
+                    .await
+                    .map_err(PodiumError::from)?;
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             }
         }
         Err(PodiumError::ElementNotFound {
-            reason: format!("element not found after {} swipes: {:?}", max_swipes, selector),
+            reason: format!(
+                "element not found after {} swipes: {:?}",
+                max_swipes, selector
+            ),
         })
     }
 }
@@ -185,29 +237,48 @@ mod tests {
         }
 
         fn selector_key(s: &Selector) -> String {
-            if let Some(t) = &s.text { format!("text:{t}") }
-            else if let Some(id) = &s.id { format!("id:{id}") }
-            else { "unknown".into() }
+            if let Some(t) = &s.text {
+                format!("text:{t}")
+            } else if let Some(id) = &s.id {
+                format!("id:{id}")
+            } else {
+                "unknown".into()
+            }
         }
     }
 
     #[async_trait]
     impl Transport for MockTransport {
         async fn launch_app(&self, app_id: &str, clear_state: bool) -> Result<(), TransportError> {
-            self.calls.lock().unwrap().push(format!("launch_app({app_id},{clear_state})"));
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("launch_app({app_id},{clear_state})"));
             Ok(())
         }
         async fn is_visible(&self, selector: &Selector) -> Result<bool, TransportError> {
             let key = Self::selector_key(selector);
-            let visible = self.visibility.lock().unwrap().get(&key).copied().unwrap_or(false);
+            let visible = self
+                .visibility
+                .lock()
+                .unwrap()
+                .get(&key)
+                .copied()
+                .unwrap_or(false);
             Ok(visible)
         }
         async fn tap(&self, selector: &Selector) -> Result<(), TransportError> {
-            self.calls.lock().unwrap().push(format!("tap({})", Self::selector_key(selector)));
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("tap({})", Self::selector_key(selector)));
             Ok(())
         }
         async fn input_text(&self, text: &str) -> Result<(), TransportError> {
-            self.calls.lock().unwrap().push(format!("input_text({text})"));
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("input_text({text})"));
             Ok(())
         }
         async fn hide_keyboard(&self) -> Result<(), TransportError> {
@@ -215,7 +286,10 @@ mod tests {
             Ok(())
         }
         async fn swipe(&self, direction: &Direction) -> Result<(), TransportError> {
-            self.calls.lock().unwrap().push(format!("swipe({direction:?})"));
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("swipe({direction:?})"));
             Ok(())
         }
         async fn back(&self) -> Result<(), TransportError> {
@@ -223,17 +297,25 @@ mod tests {
             Ok(())
         }
         async fn wait_for_idle(&self, timeout_ms: u64) -> Result<(), TransportError> {
-            self.calls.lock().unwrap().push(format!("wait_for_idle({timeout_ms})"));
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("wait_for_idle({timeout_ms})"));
             Ok(())
         }
         async fn take_screenshot(&self, name: &str) -> Result<(), TransportError> {
-            self.calls.lock().unwrap().push(format!("take_screenshot({name})"));
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("take_screenshot({name})"));
             Ok(())
         }
     }
 
     fn make_device(mock: Arc<MockTransport>) -> PodiumDevice {
-        PodiumDevice { transport: mock as Arc<dyn Transport> }
+        PodiumDevice {
+            transport: mock as Arc<dyn Transport>,
+        }
     }
 
     #[tokio::test]
@@ -241,7 +323,10 @@ mod tests {
         let mock = Arc::new(MockTransport::new());
         mock.set_visible("text:Login", true);
         let device = make_device(mock.clone());
-        device.assert_visible(Selector::text("Login")).await.unwrap();
+        device
+            .assert_visible(Selector::text("Login"))
+            .await
+            .unwrap();
     }
 
     #[tokio::test(start_paused = true)]
@@ -256,7 +341,10 @@ mod tests {
     async fn assert_not_visible_succeeds_immediately() {
         let mock = Arc::new(MockTransport::new());
         let device = make_device(mock.clone());
-        device.assert_not_visible(Selector::text("Error")).await.unwrap();
+        device
+            .assert_not_visible(Selector::text("Error"))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -264,7 +352,10 @@ mod tests {
         let mock = Arc::new(MockTransport::new());
         mock.set_visible("text:Item", true);
         let device = make_device(mock.clone());
-        device.scroll_until_visible(Selector::text("Item")).await.unwrap();
+        device
+            .scroll_until_visible(Selector::text("Item"))
+            .await
+            .unwrap();
         assert!(!mock.calls().iter().any(|c| c.starts_with("swipe")));
     }
 

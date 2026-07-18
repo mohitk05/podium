@@ -22,11 +22,11 @@
 pub mod error;
 pub mod types;
 
-mod transport;
-mod device;
 mod adb;
-mod ios;
+mod device;
 mod hierarchy;
+mod ios;
+mod transport;
 
 #[cfg(feature = "mock")]
 pub mod mock;

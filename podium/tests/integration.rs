@@ -222,7 +222,9 @@ mod emulator {
             .scroll_until_visible(Selector::text("About emulated device"))
             .await;
         if r.is_err() {
-            d.launch_app(SETTINGS_PKG, true).await.expect("relaunch for scroll");
+            d.launch_app(SETTINGS_PKG, true)
+                .await
+                .expect("relaunch for scroll");
             d.scroll_until_visible(Selector::text("About phone"))
                 .await
                 .expect("scrolled to bottom");

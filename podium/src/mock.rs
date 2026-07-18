@@ -51,23 +51,38 @@ impl Default for MockTransport {
 #[async_trait]
 impl Transport for MockTransport {
     async fn launch_app(&self, app_id: &str, clear_state: bool) -> Result<(), TransportError> {
-        self.calls.lock().unwrap().push(format!("launch_app({app_id},{clear_state})"));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("launch_app({app_id},{clear_state})"));
         Ok(())
     }
 
     async fn is_visible(&self, selector: &Selector) -> Result<bool, TransportError> {
         let key = Self::selector_key(selector);
-        let visible = self.visibility.lock().unwrap().get(&key).copied().unwrap_or(false);
+        let visible = self
+            .visibility
+            .lock()
+            .unwrap()
+            .get(&key)
+            .copied()
+            .unwrap_or(false);
         Ok(visible)
     }
 
     async fn tap(&self, selector: &Selector) -> Result<(), TransportError> {
-        self.calls.lock().unwrap().push(format!("tap({})", Self::selector_key(selector)));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("tap({})", Self::selector_key(selector)));
         Ok(())
     }
 
     async fn input_text(&self, text: &str) -> Result<(), TransportError> {
-        self.calls.lock().unwrap().push(format!("input_text({text})"));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("input_text({text})"));
         Ok(())
     }
 
@@ -77,7 +92,10 @@ impl Transport for MockTransport {
     }
 
     async fn swipe(&self, direction: &Direction) -> Result<(), TransportError> {
-        self.calls.lock().unwrap().push(format!("swipe({direction:?})"));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("swipe({direction:?})"));
         Ok(())
     }
 
@@ -87,12 +105,18 @@ impl Transport for MockTransport {
     }
 
     async fn wait_for_idle(&self, timeout_ms: u64) -> Result<(), TransportError> {
-        self.calls.lock().unwrap().push(format!("wait_for_idle({timeout_ms})"));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("wait_for_idle({timeout_ms})"));
         Ok(())
     }
 
     async fn take_screenshot(&self, name: &str) -> Result<(), TransportError> {
-        self.calls.lock().unwrap().push(format!("take_screenshot({name})"));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("take_screenshot({name})"));
         Ok(())
     }
 }
