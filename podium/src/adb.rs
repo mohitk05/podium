@@ -22,8 +22,10 @@ const MAESTRO_APP_PACKAGE: &str = "dev.mobile.maestro";
 const MAESTRO_TEST_PACKAGE: &str = "dev.mobile.maestro.test";
 // Sourced from Maestro cli-2.6.1 (Apache-2.0): maestro-client.jar/{maestro-app,maestro-server}.apk
 const MAESTRO_VERSION: &str = "2.6.1";
-const MAESTRO_APP_APK: &[u8] = include_bytes!("maestro-app.apk");
-const MAESTRO_SERVER_APK: &[u8] = include_bytes!("maestro-server.apk");
+const MAESTRO_APP_APK: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/maestro-app-2.6.1.apk"));
+const MAESTRO_SERVER_APK: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/maestro-server-2.6.1.apk"));
 const STARTUP_TIMEOUT_MS: u64 = 30_000;
 const STARTUP_POLL_MS: u64 = 200;
 

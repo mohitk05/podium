@@ -124,6 +124,17 @@ podium/
 └── Cargo.toml
 ```
 
+## Publishing a new version
+
+The Maestro driver APKs are downloaded at build time from this repo's GitHub releases. When bumping the crate version:
+
+1. Update `version` in `podium/Cargo.toml`.
+2. Create a GitHub release tagged `v<version>` (e.g. `v0.1.0`).
+3. Upload `maestro-app-2.6.1.apk` and `maestro-server-2.6.1.apk` as release assets (copy from the previous release if the Maestro version hasn't changed).
+4. `cargo publish -p podium`
+
+The APK asset names encode the Maestro version (`MAESTRO_VERSION` in `build.rs`) so they survive across Podium releases without re-upload as long as the Maestro version is unchanged.
+
 ## Known limitations
 
 - Android only. `IosTransport` exists as a stub but returns `NotSupported` for all calls.
