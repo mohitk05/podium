@@ -34,8 +34,13 @@ fn main() {
         // 1. Check vendor/ in the workspace root
         let vendor = vendor_dir.join(&filename);
         if vendor.exists() {
-            std::fs::copy(&vendor, &dest)
-                .unwrap_or_else(|e| panic!("failed to copy {} -> {}: {e}", vendor.display(), dest.display()));
+            std::fs::copy(&vendor, &dest).unwrap_or_else(|e| {
+                panic!(
+                    "failed to copy {} -> {}: {e}",
+                    vendor.display(),
+                    dest.display()
+                )
+            });
             continue;
         }
 
