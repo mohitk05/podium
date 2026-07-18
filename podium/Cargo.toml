@@ -1,6 +1,6 @@
 [package]
 name = "podium"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Async Rust library for driving Android devices in tests via Maestro's gRPC server"
 license = "Apache-2.0"
