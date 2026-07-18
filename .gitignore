@@ -18,6 +18,8 @@ podium-*/
 cli/apks/*.apk
 
 # APKs are downloaded at build time into OUT_DIR, not stored in source
+# Exception: vendor/ holds the bundled copies for local/CI builds
+!vendor/*.apk
 
 # macOS
 .DS_Store

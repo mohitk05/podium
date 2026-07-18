@@ -6,6 +6,7 @@ description = "Async Rust library for driving Android devices in tests via Maest
 license = "Apache-2.0"
 repository = "https://github.com/mohitk05/podium"
 readme = "../README.md"
+exclude = ["../vendor/*"]
 
 [dependencies]
 async-trait = "0.1"

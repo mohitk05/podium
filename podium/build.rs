@@ -4,10 +4,7 @@ use std::path::PathBuf;
 const PODIUM_VERSION: &str = env!("CARGO_PKG_VERSION");
 const MAESTRO_VERSION: &str = "2.6.1";
 
-const APKS: &[(&str, &str)] = &[
-    ("maestro-app", "maestro-app"),
-    ("maestro-server", "maestro-server"),
-];
+const APKS: &[&str] = &["maestro-app", "maestro-server"];
 
 fn main() {
     // ── proto codegen ────────────────────────────────────────────────────────
@@ -18,24 +15,42 @@ fn main() {
         .compile_protos(&["proto/maestro_android.proto"], &["proto"])
         .expect("tonic_build failed");
 
-    // ── APK download ─────────────────────────────────────────────────────────
+    // ── APK resolution ───────────────────────────────────────────────────────
+    // Priority:
+    //   1. vendor/<stem>-<maestro_version>.apk  (repo checkout, CI)
+    //   2. GitHub release asset download         (crates.io consumers)
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let vendor_dir = manifest_dir.parent().unwrap().join("vendor");
 
-    for (file_stem, asset_stem) in APKS {
-        let dest = out_dir.join(format!("{file_stem}-{MAESTRO_VERSION}.apk"));
-        if !dest.exists() {
-            let url = format!(
-                "https://github.com/mohitk05/podium/releases/download/v{PODIUM_VERSION}/{asset_stem}-{MAESTRO_VERSION}.apk"
-            );
-            eprintln!("podium build: downloading {url}");
-            let bytes = reqwest::blocking::get(&url)
-                .unwrap_or_else(|e| panic!("failed to fetch {url}: {e}"))
-                .error_for_status()
-                .unwrap_or_else(|e| panic!("HTTP error fetching {url}: {e}"))
-                .bytes()
-                .unwrap_or_else(|e| panic!("failed to read response for {url}: {e}"));
-            std::fs::write(&dest, &bytes)
-                .unwrap_or_else(|e| panic!("failed to write {}: {e}", dest.display()));
+    for stem in APKS {
+        let filename = format!("{stem}-{MAESTRO_VERSION}.apk");
+        let dest = out_dir.join(&filename);
+
+        if dest.exists() {
+            continue;
         }
+
+        // 1. Check vendor/ in the workspace root
+        let vendor = vendor_dir.join(&filename);
+        if vendor.exists() {
+            std::fs::copy(&vendor, &dest)
+                .unwrap_or_else(|e| panic!("failed to copy {} -> {}: {e}", vendor.display(), dest.display()));
+            continue;
+        }
+
+        // 2. Download from GitHub release
+        let url = format!(
+            "https://github.com/mohitk05/podium/releases/download/v{PODIUM_VERSION}/{filename}"
+        );
+        eprintln!("podium build: downloading {url}");
+        let bytes = reqwest::blocking::get(&url)
+            .unwrap_or_else(|e| panic!("failed to fetch {url}: {e}"))
+            .error_for_status()
+            .unwrap_or_else(|e| panic!("HTTP error fetching {url}: {e}"))
+            .bytes()
+            .unwrap_or_else(|e| panic!("failed to read response for {url}: {e}"));
+        std::fs::write(&dest, &bytes)
+            .unwrap_or_else(|e| panic!("failed to write {}: {e}", dest.display()));
     }
 }
