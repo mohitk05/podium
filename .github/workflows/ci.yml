@@ -65,11 +65,18 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME}"
           MAESTRO_VERSION="2.6.1"
-          gh release create "$VERSION" \
-            "vendor/maestro-app-${MAESTRO_VERSION}.apk" \
-            "vendor/maestro-server-${MAESTRO_VERSION}.apk" \
-            --title "$VERSION" \
-            --generate-notes
+          if gh release view "$VERSION" &>/dev/null; then
+            gh release upload "$VERSION" \
+              "vendor/maestro-app-${MAESTRO_VERSION}.apk" \
+              "vendor/maestro-server-${MAESTRO_VERSION}.apk" \
+              --clobber
+          else
+            gh release create "$VERSION" \
+              "vendor/maestro-app-${MAESTRO_VERSION}.apk" \
+              "vendor/maestro-server-${MAESTRO_VERSION}.apk" \
+              --title "$VERSION" \
+              --generate-notes
+          fi
 
       - name: cargo publish
         run: cargo publish -p podium
