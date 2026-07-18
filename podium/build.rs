@@ -17,11 +17,13 @@ fn main() {
 
     // ── APK resolution ───────────────────────────────────────────────────────
     // Priority:
-    //   1. vendor/<stem>-<maestro_version>.apk  (repo checkout, CI)
-    //   2. GitHub release asset download         (crates.io consumers)
+    //   1. $PODIUM_APK_DIR/<stem>-<maestro_version>.apk  (explicit override, used by CI publish)
+    //   2. vendor/<stem>-<maestro_version>.apk            (repo checkout)
+    //   3. GitHub release asset download                  (crates.io consumers)
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let vendor_dir = manifest_dir.parent().unwrap().join("vendor");
+    let apk_dir_override = std::env::var("PODIUM_APK_DIR").ok().map(PathBuf::from);
 
     for stem in APKS {
         let filename = format!("{stem}-{MAESTRO_VERSION}.apk");
@@ -31,7 +33,22 @@ fn main() {
             continue;
         }
 
-        // 1. Check vendor/ in the workspace root
+        // 1. Explicit override dir (set during cargo publish in CI)
+        if let Some(ref dir) = apk_dir_override {
+            let src = dir.join(&filename);
+            if src.exists() {
+                std::fs::copy(&src, &dest).unwrap_or_else(|e| {
+                    panic!(
+                        "failed to copy {} -> {}: {e}",
+                        src.display(),
+                        dest.display()
+                    )
+                });
+                continue;
+            }
+        }
+
+        // 2. Check vendor/ relative to workspace root
         let vendor = vendor_dir.join(&filename);
         if vendor.exists() {
             std::fs::copy(&vendor, &dest).unwrap_or_else(|e| {
@@ -44,7 +61,7 @@ fn main() {
             continue;
         }
 
-        // 2. Download from GitHub release
+        // 3. Download from GitHub release
         let url = format!(
             "https://github.com/mohitk05/podium/releases/download/v{PODIUM_VERSION}/{filename}"
         );
