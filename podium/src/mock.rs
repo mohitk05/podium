@@ -119,4 +119,21 @@ impl Transport for MockTransport {
             .push(format!("take_screenshot({name})"));
         Ok(())
     }
+
+    async fn view_hierarchy(&self) -> Result<String, TransportError> {
+        self.calls.lock().unwrap().push("view_hierarchy".into());
+        Ok("<hierarchy />".into())
+    }
+
+    async fn tap_at(&self, x: u32, y: u32) -> Result<(), TransportError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("tap_at({x},{y})"));
+        Ok(())
+    }
+
+    async fn foreground_package(&self) -> Result<Option<String>, TransportError> {
+        Ok(None)
+    }
 }

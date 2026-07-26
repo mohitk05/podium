@@ -52,4 +52,17 @@ impl Transport for IosTransport {
             reason: "iOS transport not implemented in v1".into(),
         })
     }
+    async fn view_hierarchy(&self) -> Result<String, TransportError> {
+        Err(TransportError::NotSupported {
+            reason: "iOS transport not implemented in v1".into(),
+        })
+    }
+    async fn tap_at(&self, _x: u32, _y: u32) -> Result<(), TransportError> {
+        Err(TransportError::NotSupported {
+            reason: "iOS transport not implemented in v1".into(),
+        })
+    }
+    async fn foreground_package(&self) -> Result<Option<String>, TransportError> {
+        Ok(None)
+    }
 }

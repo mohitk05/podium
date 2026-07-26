@@ -12,8 +12,8 @@ pub(crate) mod proto {
 
 use proto::maestro_driver_client::MaestroDriverClient;
 use proto::{
-    CheckWindowUpdatingRequest, InputTextRequest, LaunchAppRequest, ScreenshotRequest, TapRequest,
-    ViewHierarchyRequest,
+    CheckWindowUpdatingRequest, DeviceInfoRequest, InputTextRequest, LaunchAppRequest,
+    ScreenshotRequest, TapRequest, ViewHierarchyRequest,
 };
 
 const MAESTRO_RUNNER: &str = "dev.mobile.maestro.test/androidx.test.runner.AndroidJUnitRunner";
@@ -50,12 +50,12 @@ impl AdbTransport {
             reason: format!("adb forward: {e}"),
         })?;
 
-        // 3. Start on-device gRPC server only if not already accepting connections
-        let already_up = tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
-            .await
-            .is_ok();
+        // 3. Probe the gRPC server with deviceInfo to confirm it's genuinely
+        //    alive — a TCP-open check alone is fooled by stale adb port forwards
+        //    from previous sessions pointing at nothing on the device side.
+        let server_alive = probe_grpc_server(port).await;
 
-        if !already_up {
+        if !server_alive {
             adb_cmd(
                 &serial,
                 &[
@@ -77,14 +77,11 @@ impl AdbTransport {
                 reason: format!("am instrument spawn: {e}"),
             })?;
 
-            // 4. Wait for gRPC server to accept TCP connections
+            // 4. Wait for gRPC server to respond to deviceInfo
             let deadline =
                 std::time::Instant::now() + std::time::Duration::from_millis(STARTUP_TIMEOUT_MS);
             loop {
-                if tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
-                    .await
-                    .is_ok()
-                {
+                if probe_grpc_server(port).await {
                     break;
                 }
                 if std::time::Instant::now() >= deadline {
@@ -123,16 +120,20 @@ impl AdbTransport {
         cmd
     }
 
-    async fn view_hierarchy(&self) -> Result<String, TransportError> {
-        let mut client = self.client.clone();
-        let resp = client
-            .view_hierarchy(ViewHierarchyRequest {})
-            .await
-            .map_err(|e| TransportError::OperationFailed {
-                reason: format!("viewHierarchy: {e}"),
-            })?;
-        Ok(resp.into_inner().hierarchy)
-    }
+}
+
+async fn probe_grpc_server(port: u16) -> bool {
+    let endpoint = format!("http://127.0.0.1:{port}");
+    let Ok(channel) = Channel::from_shared(endpoint)
+        .and_then(|e| Ok(e.connect_lazy()))
+    else {
+        return false;
+    };
+    let mut client = MaestroDriverClient::new(channel);
+    client
+        .device_info(DeviceInfoRequest {})
+        .await
+        .is_ok()
 }
 
 async fn ensure_driver_installed(serial: &Option<String>) -> Result<(), TransportError> {
@@ -230,6 +231,41 @@ impl Transport for AdbTransport {
                 reason: format!("launchApp: {e}"),
             })?;
         Ok(())
+    }
+
+    async fn foreground_package(&self) -> Result<Option<String>, TransportError> {
+        let output = self
+            .adb_shell(&[
+                "dumpsys",
+                "activity",
+                "activities",
+                "|",
+                "grep",
+                "mResumedActivity",
+            ])
+            .output()
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("dumpsys activity: {e}"),
+            })?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Line looks like: mResumedActivity: ActivityRecord{... u0 com.example/.MainActivity ...}
+        let package = stdout.lines().find_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.starts_with("mResumedActivity") {
+                trimmed.split_whitespace().find_map(|token| {
+                    // token is "com.example/.MainActivity" — take the package part
+                    if token.contains('/') {
+                        token.split('/').next().map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+            } else {
+                None
+            }
+        });
+        Ok(package)
     }
 
     async fn is_visible(&self, selector: &Selector) -> Result<bool, TransportError> {
@@ -339,6 +375,27 @@ impl Transport for AdbTransport {
             .map_err(|e| TransportError::OperationFailed {
                 reason: format!("write screenshot: {e}"),
             })?;
+        Ok(())
+    }
+
+    async fn view_hierarchy(&self) -> Result<String, TransportError> {
+        let mut client = self.client.clone();
+        let resp = client
+            .view_hierarchy(ViewHierarchyRequest {})
+            .await
+            .map_err(|e| TransportError::OperationFailed {
+                reason: format!("viewHierarchy: {e}"),
+            })?;
+        Ok(resp.into_inner().hierarchy)
+    }
+
+    async fn tap_at(&self, x: u32, y: u32) -> Result<(), TransportError> {
+        let mut client = self.client.clone();
+        client.tap(TapRequest { x, y }).await.map_err(|e| {
+            TransportError::OperationFailed {
+                reason: format!("tap_at: {e}"),
+            }
+        })?;
         Ok(())
     }
 }

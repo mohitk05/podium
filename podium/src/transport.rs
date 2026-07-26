@@ -5,6 +5,7 @@ use async_trait::async_trait;
 #[async_trait]
 pub(crate) trait Transport: Send + Sync {
     async fn launch_app(&self, app_id: &str, clear_state: bool) -> Result<(), TransportError>;
+    async fn foreground_package(&self) -> Result<Option<String>, TransportError>;
     async fn is_visible(&self, selector: &Selector) -> Result<bool, TransportError>;
     async fn tap(&self, selector: &Selector) -> Result<(), TransportError>;
     async fn input_text(&self, text: &str) -> Result<(), TransportError>;
@@ -13,4 +14,6 @@ pub(crate) trait Transport: Send + Sync {
     async fn back(&self) -> Result<(), TransportError>;
     async fn wait_for_idle(&self, timeout_ms: u64) -> Result<(), TransportError>;
     async fn take_screenshot(&self, name: &str) -> Result<(), TransportError>;
+    async fn view_hierarchy(&self) -> Result<String, TransportError>;
+    async fn tap_at(&self, x: u32, y: u32) -> Result<(), TransportError>;
 }

@@ -120,6 +120,41 @@ impl PodiumDevice {
             .map_err(Into::into)
     }
 
+    /// Get the raw UI hierarchy XML from the device.
+    /// This is useful for property-based testing frameworks that need to
+    /// extract state information from the UI tree.
+    pub async fn get_ui_hierarchy(&self) -> Result<String, PodiumError> {
+        self.transport
+            .view_hierarchy()
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Ensure `app_id` is the foreground app, re-launching it if not.
+    ///
+    /// Call this after actions that may exit the app (e.g. `back()`) to recover
+    /// from the case where the back key navigated past the app's root activity.
+    pub async fn ensure_foreground(&self, app_id: &str) -> Result<(), PodiumError> {
+        let fg = self
+            .transport
+            .foreground_package()
+            .await
+            .map_err(PodiumError::from)?;
+        if fg.as_deref() != Some(app_id) {
+            self.launch_app(app_id, false).await?;
+        }
+        Ok(())
+    }
+
+    /// Tap at specific screen coordinates.
+    /// Useful for randomized testing or when element selectors are not available.
+    pub async fn tap_at(&self, x: u32, y: u32) -> Result<(), PodiumError> {
+        self.transport
+            .tap_at(x, y)
+            .await
+            .map_err(Into::into)
+    }
+
     async fn wait_until_visible(
         &self,
         selector: &Selector,
@@ -309,6 +344,20 @@ mod tests {
                 .unwrap()
                 .push(format!("take_screenshot({name})"));
             Ok(())
+        }
+        async fn view_hierarchy(&self) -> Result<String, TransportError> {
+            self.calls.lock().unwrap().push("view_hierarchy".into());
+            Ok("<hierarchy />".into())
+        }
+        async fn tap_at(&self, x: u32, y: u32) -> Result<(), TransportError> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("tap_at({x},{y})"));
+            Ok(())
+        }
+        async fn foreground_package(&self) -> Result<Option<String>, TransportError> {
+            Ok(None)
         }
     }
 
