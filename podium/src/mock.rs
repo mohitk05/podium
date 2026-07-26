@@ -126,10 +126,7 @@ impl Transport for MockTransport {
     }
 
     async fn tap_at(&self, x: u32, y: u32) -> Result<(), TransportError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("tap_at({x},{y})"));
+        self.calls.lock().unwrap().push(format!("tap_at({x},{y})"));
         Ok(())
     }
 

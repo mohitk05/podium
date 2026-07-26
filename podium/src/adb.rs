@@ -119,21 +119,15 @@ impl AdbTransport {
         cmd.args(args);
         cmd
     }
-
 }
 
 async fn probe_grpc_server(port: u16) -> bool {
     let endpoint = format!("http://127.0.0.1:{port}");
-    let Ok(channel) = Channel::from_shared(endpoint)
-        .and_then(|e| Ok(e.connect_lazy()))
-    else {
+    let Ok(channel) = Channel::from_shared(endpoint).and_then(|e| Ok(e.connect_lazy())) else {
         return false;
     };
     let mut client = MaestroDriverClient::new(channel);
-    client
-        .device_info(DeviceInfoRequest {})
-        .await
-        .is_ok()
+    client.device_info(DeviceInfoRequest {}).await.is_ok()
 }
 
 async fn ensure_driver_installed(serial: &Option<String>) -> Result<(), TransportError> {
@@ -391,11 +385,12 @@ impl Transport for AdbTransport {
 
     async fn tap_at(&self, x: u32, y: u32) -> Result<(), TransportError> {
         let mut client = self.client.clone();
-        client.tap(TapRequest { x, y }).await.map_err(|e| {
-            TransportError::OperationFailed {
+        client
+            .tap(TapRequest { x, y })
+            .await
+            .map_err(|e| TransportError::OperationFailed {
                 reason: format!("tap_at: {e}"),
-            }
-        })?;
+            })?;
         Ok(())
     }
 }

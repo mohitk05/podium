@@ -124,10 +124,7 @@ impl PodiumDevice {
     /// This is useful for property-based testing frameworks that need to
     /// extract state information from the UI tree.
     pub async fn get_ui_hierarchy(&self) -> Result<String, PodiumError> {
-        self.transport
-            .view_hierarchy()
-            .await
-            .map_err(Into::into)
+        self.transport.view_hierarchy().await.map_err(Into::into)
     }
 
     /// Ensure `app_id` is the foreground app, re-launching it if not.
@@ -149,10 +146,7 @@ impl PodiumDevice {
     /// Tap at specific screen coordinates.
     /// Useful for randomized testing or when element selectors are not available.
     pub async fn tap_at(&self, x: u32, y: u32) -> Result<(), PodiumError> {
-        self.transport
-            .tap_at(x, y)
-            .await
-            .map_err(Into::into)
+        self.transport.tap_at(x, y).await.map_err(Into::into)
     }
 
     async fn wait_until_visible(
@@ -350,10 +344,7 @@ mod tests {
             Ok("<hierarchy />".into())
         }
         async fn tap_at(&self, x: u32, y: u32) -> Result<(), TransportError> {
-            self.calls
-                .lock()
-                .unwrap()
-                .push(format!("tap_at({x},{y})"));
+            self.calls.lock().unwrap().push(format!("tap_at({x},{y})"));
             Ok(())
         }
         async fn foreground_package(&self) -> Result<Option<String>, TransportError> {
