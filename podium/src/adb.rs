@@ -123,7 +123,7 @@ impl AdbTransport {
 
 async fn probe_grpc_server(port: u16) -> bool {
     let endpoint = format!("http://127.0.0.1:{port}");
-    let Ok(channel) = Channel::from_shared(endpoint).and_then(|e| Ok(e.connect_lazy())) else {
+    let Ok(channel) = Channel::from_shared(endpoint).map(|e| e.connect_lazy()) else {
         return false;
     };
     let mut client = MaestroDriverClient::new(channel);
