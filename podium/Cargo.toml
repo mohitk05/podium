@@ -1,6 +1,6 @@
 [package]
 name = "podium-driver"
-version = "0.0.14"
+version = "0.2.1"
 edition = "2021"
 description = "Async Rust library for driving Android devices in tests via Maestro's gRPC server"
 license = "Apache-2.0"
